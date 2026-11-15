@@ -23,6 +23,7 @@ import { AddTag } from './AddTag'
 import { EditableTiles } from './EditableTiles'
 import { EditVersion } from './EditVersion'
 import { LinkSteps } from './LinkSteps'
+import { MealBar, useMealContext } from './MealBar'
 import { SharePanel, SharingSwitch } from './SharePanel'
 import type { Fit, RecipeVersion, SkipImpact } from '@/lib/api/types'
 import { useMeasure, useUnits } from '@/lib/prefs'
@@ -104,6 +105,7 @@ export function RecipeScreen() {
   >(null)
   const [units, setUnits] = useUnits()
   const router = useRouter()
+  const mealCtx = useMealContext()
   const deleteVersion = useDeleteVersion()
   const dirty = useRef(false)
   /** The Edit pen toggles the editor; closing it with unsaved changes asks first. */
@@ -157,7 +159,11 @@ export function RecipeScreen() {
 
   return (
     <Screen
-      back={{ label: 'Recipes', href: '/recipes' }}
+      back={
+        mealCtx?.backHref
+          ? { label: `Back to ${mealCtx.meal?.name ?? 'the meal'}`, href: mealCtx.backHref }
+          : { label: 'Recipes', href: '/recipes' }
+      }
       eyebrow={[COURSE_LABEL[recipe.course], recipe.form].filter(Boolean).join(' · ')}
       title={recipe.title}
       subtitle={
@@ -173,10 +179,18 @@ export function RecipeScreen() {
             variant="secondary"
             onPress={() => setEditing('share')}
           />
-          <Button label="Start cooking" icon="play" href={`/cook/${v.id}?scale=${scale}`} />
+          <Button
+            label="Start cooking"
+            icon="play"
+            href={`/cook/${v.id}?${new URLSearchParams({
+              scale: String(scale),
+              ...(mealCtx?.backHref ? { meal: mealCtx.mealId, from: mealCtx.backHref } : {}),
+            })}`}
+          />
         </View>
       }
     >
+      {mealCtx ? <MealBar ctx={mealCtx} recipeId={recipe.id} /> : null}
       {editing === 'share' ? (
         <SharePanel
           key={`share:${recipe.id}`}
@@ -274,6 +288,8 @@ export function RecipeScreen() {
           ) : null
         }
       />
+      {/* Again at the end, so the next dish is right there once you have read this one. */}
+      {mealCtx ? <MealBar ctx={mealCtx} recipeId={recipe.id} /> : null}
     </Screen>
   )
 }

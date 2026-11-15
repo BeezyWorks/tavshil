@@ -23,6 +23,15 @@ export const printHref = (key: string): string => `/print/${key}`
 /** The wizard, which plans ONE meal and starts with guests. Step: `guests` | `menu` | `check`. */
 export const wizardHref = (mealId: Id, step?: 'guests' | 'menu' | 'check'): string =>
   step ? `/meal/${mealId}?step=${step}` : `/meal/${mealId}`
+/**
+ * A recipe opened from a meal: the recipe page shows a bar to step through the meal's other dishes, and its back link
+ * returns to `from` (the plan week or hosted page it was opened from).
+ */
+export const recipeInMealHref = (recipeId: Id, mealId: Id, from: string): string =>
+  `/recipes/${recipeId}?${new URLSearchParams({ meal: mealId, from })}`
+/** `from` must be an in-app path: never another origin. */
+export const safeFrom = (from?: string): string | undefined =>
+  from && from.startsWith('/') && !from.startsWith('//') ? from : undefined
 
 /** The hosted key of a meal (its run's key when it belongs to a run, else `meal-<id>`). */
 export function hostedKeyFor(meal: {

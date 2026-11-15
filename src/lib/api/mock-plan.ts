@@ -149,7 +149,7 @@ const state: MockMeal[] = [
     hosted: false,
     guests: {},
     items: [
-      { id: 'pi-1', course: 'main', title: 'Pasta bake', recipeId: null },
+      { id: 'pi-1', course: 'main', title: 'Pasta bake', recipeId: 'r-pasta-bake' },
       { id: 'pi-2', course: 'main', title: 'Green salad', recipeId: null },
     ],
   },
@@ -162,7 +162,12 @@ const state: MockMeal[] = [
     time: null,
     hosted: true,
     guests: {},
-    items: [{ id: 'pi-3', course: 'main', title: 'Roast chicken', recipeId: null }],
+    items: [
+      { id: 'pi-3', course: 'main', title: 'Roast chicken', recipeId: null },
+      { id: 'pi-4', course: 'main', title: 'Chicken soup', recipeId: 'r-chicken-soup' },
+      { id: 'pi-5', course: 'main', title: 'Silan chicken', recipeId: 'r-silan-chicken' },
+      { id: 'pi-6', course: 'side', title: 'Potato kugel', recipeId: 'r-potato-kugel' },
+    ],
   },
 ]
 

@@ -1,4 +1,4 @@
-import { useRouter, type Href } from 'expo-router'
+import { usePathname, useRouter, type Href } from 'expo-router'
 import React, { useEffect, useRef, useState } from 'react'
 import { Platform, Pressable, StyleSheet, TextInput, View, type ViewStyle } from 'react-native'
 
@@ -19,7 +19,7 @@ import {
   useUpdatePlanMeal,
 } from '@/lib/api/hooks'
 import type { HostedCourse, HostedMeal, HostedMenuItem, Id } from '@/lib/api/types'
-import { parseTime, timeLabel, wizardHref } from '@/lib/plan'
+import { parseTime, recipeInMealHref, timeLabel, wizardHref } from '@/lib/plan'
 import { colors, fontSize, fonts, radius, size, space } from '@/theme/tokens'
 
 /** The id of a meal, creating a virtual default meal first. */
@@ -312,6 +312,7 @@ function Dish({
   busy: boolean
 }) {
   const router = useRouter()
+  const pathname = usePathname()
   const update = useUpdateMealDish()
   const [editing, setEditing] = useState(false)
   const [title, setTitle] = useState(item.title)
@@ -363,7 +364,13 @@ function Dish({
         {item.recipeId ? (
           <Pressable
             accessibilityRole="link"
-            onPress={() => router.push(`/recipes/${item.recipeId}` as Href)}
+            onPress={() =>
+              router.push(
+                (mealId
+                  ? recipeInMealHref(item.recipeId!, mealId, pathname)
+                  : `/recipes/${item.recipeId}`) as Href,
+              )
+            }
           >
             <Text color={color} style={{ textDecorationLine: 'underline' }}>
               {item.title}

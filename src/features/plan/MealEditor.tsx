@@ -13,7 +13,7 @@ import {
 } from '@/lib/api/hooks'
 import type { DaySlot, Id, ISODate, MealCard } from '@/lib/api/types'
 import { longDate } from '@/lib/dates'
-import { SLOT_LABEL } from '@/lib/plan'
+import { planHref, recipeInMealHref, SLOT_LABEL } from '@/lib/plan'
 import { colors, radius, size, space } from '@/theme/tokens'
 
 import { Sheet } from './Sheet'
@@ -90,7 +90,11 @@ export function MealEditor({
                   accessibilityLabel={`Open recipe: ${d.title}`}
                   onPress={() => {
                     onClose()
-                    router.push(`/recipes/${d.recipeId}` as Href)
+                    router.push(
+                      (mealId
+                        ? recipeInMealHref(d.recipeId!, mealId, planHref({ week: date }))
+                        : `/recipes/${d.recipeId}`) as Href,
+                    )
                   }}
                   style={{ flex: 1, paddingVertical: space.sm }}
                 >
