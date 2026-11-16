@@ -574,6 +574,8 @@ interface Scheduled {
   mealId: Id
   mealName: string
   mealTime: string
+  mealDate: ISODate
+  guessed: boolean
   itemId?: Id
   dish: string
   recipeId?: Id
@@ -618,6 +620,9 @@ function scheduleMeal(m: Meal): Scheduled[] {
       mealId: m.id,
       mealName: m.name,
       mealTime: m.time,
+      mealDate: m.date,
+      // Pretend the kugel recipe has no times, so the guessed-time badge shows up.
+      guessed: /kugel/i.test(it.title),
       itemId: it.id,
       dish: it.title,
       recipeId: it.recipeId,
@@ -1208,10 +1213,11 @@ export const mockApi: TavshilApi = {
         mealId: t.mealId,
         mealName: t.mealName,
         mealTime: clock12(t.mealTime),
+        mealDate: t.mealDate,
         ...(t.itemId && { itemId: t.itemId }),
         ...(t.recipeId && { recipeId: t.recipeId }),
         ...(t.versionId && { versionId: t.versionId }),
-        guessedTimes: false,
+        guessedTimes: t.guessed,
         notes: [],
         done: prepDone.has(t.key),
       }

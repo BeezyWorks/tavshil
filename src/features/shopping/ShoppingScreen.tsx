@@ -1,33 +1,82 @@
-import React, { useRef, useState } from 'react'
-import { PanResponder, Platform, StyleSheet, View } from 'react-native'
+import { useRouter, type Href } from 'expo-router'
+import { useQueryClient } from '@tanstack/react-query'
+import React, { useCallback, useMemo, useRef, useState } from 'react'
+import { PanResponder, Platform, Pressable, StyleSheet, View } from 'react-native'
 
 import {
   Badge,
   Button,
-  Card,
   Checkbox,
   Empty,
-  ListRow,
   Loading,
+  Pill,
   Screen,
   Text,
   TextField,
 } from '@/components'
 import { api } from '@/lib/api/client'
-import { useOptimisticMutation, useShopping } from '@/lib/api/hooks'
+import { useOptimisticMutation, useShopping, useToday } from '@/lib/api/hooks'
 import type { ShoppingLine } from '@/lib/api/types'
-import { USE_SOON_LINK } from '@/lib/strings'
-import { colors, space } from '@/theme/tokens'
+import { storage } from '@/lib/storage'
+import { SHOP } from '@/lib/strings'
+import { colors, fontSize, fonts, radius, space } from '@/theme/tokens'
+
+import {
+  amountText,
+  buildView,
+  forWhat,
+  moveBefore,
+  pantrySummary,
+  shopMeals,
+  validSelection,
+  type ShopGroup,
+} from './model'
+
+const KEY = 'tavshil.shopping.meals'
+
+/** The meals picked on this device; none means everything. */
+function useSelection(): [string[], (next: string[]) => void] {
+  const [sel, setSel] = useState<string[]>(() => {
+    try {
+      const v = JSON.parse(storage.get(KEY) ?? '[]')
+      return Array.isArray(v) ? v.filter((x) => typeof x === 'string') : []
+    } catch {
+      return []
+    }
+  })
+  const set = useCallback((next: string[]) => {
+    setSel(next)
+    storage.set(KEY, next.length ? JSON.stringify(next) : null)
+  }, [])
+  return [sel, set]
+}
 
 export function ShoppingScreen() {
-  const { data, isLoading } = useShopping()
+  const router = useRouter()
+  const qc = useQueryClient()
+  const today = useToday()
+  const all = useShopping()
+  const [stored, setSelected] = useSelection()
+  const meals = useMemo(() => shopMeals(all.data ?? []), [all.data])
+  // Wait for the whole list before trusting a stored pick: until then every meal looks gone.
+  const selected = useMemo(
+    () => (all.data ? validSelection(stored, meals) : []),
+    [all.data, stored, meals],
+  )
+  const picked = selected.length > 0
+  const pick = useShopping(selected)
+  const data = picked ? pick.data : all.data
   const [name, setName] = useState('')
+  const [open, setOpen] = useState<Record<string, boolean>>({})
+  const flip = (k: string) => setOpen((o) => ({ ...o, [k]: !o[k] }))
+
   const check = useOptimisticMutation({
     fn: (a: { id: string; checked: boolean }) => api.setShoppingChecked(a.id, a.checked),
     key: ['shopping'],
     apply: (old: ShoppingLine[], a) =>
       old.map((l) => (l.id === a.id ? { ...l, checked: a.checked } : l)),
     fromResult: (lines) => lines,
+    keys: [['shopping']],
   })
   const order = useOptimisticMutation({
     fn: (ids: string[]) => api.setShoppingOrder(ids),
@@ -61,90 +110,233 @@ export function ShoppingScreen() {
     apply: (old: ShoppingLine[], id) => old.filter((l) => l.id !== id),
     fromResult: (lines) => lines,
   })
-  const moveTo = (id: string, to: number) => {
-    const ids = (data ?? []).map((l) => l.id)
-    const i = ids.indexOf(id)
-    if (i < 0 || to === i) return
-    ids.splice(to, 0, ids.splice(i, 1)[0])
+  const tick = (id: string, checked: boolean) => {
+    // The picked view is cached under its own key; tick it too so it answers at once.
+    qc.setQueriesData<ShoppingLine[]>({ queryKey: ['shopping'] }, (old) =>
+      old?.map((l) => (l.id === id ? { ...l, checked } : l)),
+    )
+    check.mutate({ id, checked })
+  }
+  /** Drop `id` where `target` is in the whole list; the groups are views of that one order. */
+  const moveOver = (id: string, target: string) => {
+    const ids = moveBefore(
+      (all.data ?? []).map((l) => l.id),
+      id,
+      target,
+    )
     order.mutate(ids)
   }
-  const submit = async () => {
+  const submit = () => {
     if (!name.trim()) return
     add.mutate(name.trim())
     setName('')
   }
+  const toggle = (id: string) =>
+    setSelected(selected.includes(id) ? selected.filter((x) => x !== id) : [...selected, id])
+
+  const view = useMemo(() => buildView(data ?? [], today, picked), [data, today, picked])
   const left = (data ?? []).filter((l) => !l.checked).length
+  const rowProps = (l: ShoppingLine) => ({
+    line: l,
+    picked,
+    onCheck: (c: boolean) => tick(l.id, c),
+    onRemove: l.custom ? () => del.mutate(l.id) : undefined,
+  })
+  const section = (g: ShopGroup, reorder: boolean) => (
+    <View key={g.key} style={styles.section}>
+      <Text variant="label" accessibilityRole="header" style={styles.heading}>
+        {g.title}
+        {g.meals ? ` · ${g.meals}` : ''}
+      </Text>
+      <Lines lines={g.lines} reorder={reorder} rowProps={rowProps} onMove={moveOver} />
+    </View>
+  )
 
   return (
-    <Screen
-      title="Shopping list"
-      subtitle="Totals across your accepted meals, minus what you already have to use up. Drag the handle to match your route."
-    >
-      {/* Use soon lives under Shopping now; this becomes a filter chip in the Shopping redesign. */}
-      <Card>
-        <ListRow
-          title={USE_SOON_LINK.label}
-          subtitle={USE_SOON_LINK.subtitle}
-          href={USE_SOON_LINK.href}
-          last
-        />
-      </Card>
-      {isLoading || !data ? (
+    <Screen title={SHOP.title}>
+      {all.isLoading || !all.data ? (
         <Loading />
       ) : (
-        <Card>
-          <Text variant="small">
-            {left} to buy, {data.length - left} checked
-          </Text>
-          {data.length === 0 ? (
-            <Empty>
-              Nothing to buy yet. Accept a meal and its ingredients appear here, or add your own.
-            </Empty>
+        <View style={styles.page}>
+          <View style={styles.chips} accessibilityRole="menu">
+            {meals.map((m) => (
+              <Pill
+                key={m.mealId}
+                label={`${m.name} · ${m.count}`}
+                selected={selected.includes(m.mealId)}
+                onPress={() => toggle(m.mealId)}
+              />
+            ))}
+            <Pill label={SHOP.useSoon} onPress={() => router.push('/use-soon' as Href)} />
+          </View>
+
+          {picked && pick.isLoading ? <Loading /> : null}
+          {!picked && all.data.length === 0 ? <Empty>{SHOP.empty}</Empty> : null}
+          {picked && pick.data && pick.data.length === 0 ? <Empty>{SHOP.nothing}</Empty> : null}
+          {data && data.length > 0 ? (
+            <Text variant="small">
+              {left === 1 ? '1 to buy' : `${left} to buy`}
+              {data.length - left > 0 ? `, ${data.length - left} in the cart` : ''}
+            </Text>
           ) : null}
-          {data.map((l, i) => (
-            <Line
-              key={l.id}
-              line={l}
-              index={i}
-              count={data.length}
-              onCheck={(checked) => check.mutate({ id: l.id, checked })}
-              onMoveTo={(to) => moveTo(l.id, to)}
-              onRemove={l.custom ? () => del.mutate(l.id) : undefined}
-            />
-          ))}
+
+          {view.groups.map((g) => section(g, !picked))}
+
+          {view.mine.length ? (
+            <View style={styles.section}>
+              <Text variant="label" accessibilityRole="header" style={styles.heading}>
+                Added by you
+              </Text>
+              <Lines lines={view.mine} reorder={!picked} rowProps={rowProps} onMove={moveOver} />
+            </View>
+          ) : null}
+
+          {view.pantry.length ? (
+            <View style={styles.group}>
+              <Fold
+                open={!!open.pantry}
+                onPress={() => flip('pantry')}
+                label={SHOP.pantry}
+                hint={pantrySummary(view.pantry)}
+              />
+              {open.pantry ? (
+                <Lines lines={view.pantry} reorder={false} rowProps={rowProps} onMove={moveOver} />
+              ) : null}
+            </View>
+          ) : null}
+
+          {view.later ? (
+            <View style={styles.group}>
+              <Fold
+                open={!!open.later}
+                onPress={() => flip('later')}
+                label="Later"
+                hint={`${view.later.meals} · ${view.later.lines.length} items`}
+              />
+              {open.later ? (
+                <Lines
+                  lines={view.later.lines}
+                  reorder={false}
+                  rowProps={rowProps}
+                  onMove={moveOver}
+                />
+              ) : null}
+            </View>
+          ) : null}
+
+          {view.cart.length ? (
+            <View style={styles.group}>
+              <Fold
+                open={!!open.cart}
+                onPress={() => flip('cart')}
+                label={`${SHOP.cart} (${view.cart.length})`}
+              />
+              {open.cart ? (
+                <Lines lines={view.cart} reorder={false} rowProps={rowProps} onMove={moveOver} />
+              ) : null}
+            </View>
+          ) : null}
+
           <View style={styles.add}>
-            <TextField
-              label="Add something"
-              value={name}
-              onChangeText={setName}
-              placeholder="e.g. Tin foil"
-              onSubmitEditing={submit}
-            />
+            <View style={styles.addField}>
+              <TextField
+                label={SHOP.add}
+                value={name}
+                onChangeText={setName}
+                placeholder="e.g. Tin foil"
+                onSubmitEditing={submit}
+              />
+            </View>
             <Button label="+ Add" disabled={!name.trim()} onPress={submit} />
           </View>
-        </Card>
+        </View>
       )}
     </Screen>
   )
 }
 
+/** A folded row: label, a hint, and a chevron that turns. */
+function Fold({
+  open,
+  onPress,
+  label,
+  hint,
+}: {
+  open: boolean
+  onPress: () => void
+  label: string
+  hint?: string
+}) {
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityState={{ expanded: open }}
+      onPress={onPress}
+      style={[styles.fold, open && styles.sep]}
+    >
+      <Text style={styles.flex}>
+        <Text variant="bodyStrong">{label}</Text>
+        {hint ? <Text variant="small">{`  ·  ${hint}`}</Text> : null}
+      </Text>
+      <Text color={colors.muted} style={[styles.chev, open && styles.chevOpen]}>
+        {'›'}
+      </Text>
+    </Pressable>
+  )
+}
+
+interface RowProps {
+  line: ShoppingLine
+  picked: boolean
+  onCheck: (c: boolean) => void
+  onRemove?: () => void
+}
+
+/** One white group of lines; the handle on each moves it within the group. */
+function Lines({
+  lines,
+  reorder,
+  rowProps,
+  onMove,
+}: {
+  lines: ShoppingLine[]
+  reorder: boolean
+  rowProps: (l: ShoppingLine) => RowProps
+  onMove: (id: string, target: string) => void
+}) {
+  return (
+    <View style={styles.group}>
+      {lines.map((l, i) => (
+        <Line
+          key={l.id}
+          {...rowProps(l)}
+          index={i}
+          count={lines.length}
+          last={i === lines.length - 1}
+          onMoveTo={reorder ? (to) => onMove(l.id, lines[to].id) : undefined}
+        />
+      ))}
+    </View>
+  )
+}
+
 function Line({
   line,
+  picked,
   index,
   count,
+  last,
   onCheck,
   onMoveTo,
   onRemove,
-}: {
-  line: ShoppingLine
+}: RowProps & {
   index: number
   count: number
-  onCheck: (c: boolean) => void
-  onMoveTo: (to: number) => void
-  onRemove?: () => void
+  last: boolean
+  onMoveTo?: (to: number) => void
 }) {
   const [dy, setDy] = useState<number | null>(null)
-  const height = useRef(48)
+  const height = useRef(56)
   const latest = useRef({ index, count, onMoveTo })
   latest.current = { index, count, onMoveTo }
   const target = (d: number) => {
@@ -159,79 +351,99 @@ function Line({
       onPanResponderMove: (_, g) => setDy(g.dy),
       onPanResponderRelease: (_, g) => {
         setDy(null)
-        latest.current.onMoveTo(target(g.dy))
+        const to = target(g.dy)
+        if (to !== latest.current.index) latest.current.onMoveTo?.(to)
       },
       onPanResponderTerminate: () => setDy(null),
     }),
   ).current
   const dragging = dy !== null
+  const why = forWhat(line, picked)
+  const amount = amountText(line)
   return (
     <View
       style={[
         styles.row,
-        dragging && {
-          transform: [{ translateY: dy }],
-          zIndex: 10,
-          backgroundColor: colors.surface,
-        },
+        !last && styles.sep,
+        dragging && { transform: [{ translateY: dy }], zIndex: 10, backgroundColor: colors.subtle },
       ]}
       onLayout={(e) => {
         height.current = e.nativeEvent.layout.height
       }}
     >
-      <View
-        {...pan.panHandlers}
-        accessibilityRole="button"
-        accessibilityLabel={`Drag to reorder ${line.name}`}
-        style={styles.handle}
-      >
-        <Text variant="bodyStrong" style={styles.grip}>
-          ⠿
-        </Text>
-      </View>
       <Checkbox label={`Bought ${line.name}`} checked={line.checked} onChange={onCheck} />
       <View style={styles.main}>
-        <Text variant="bodyStrong" style={line.checked && styles.done}>
+        <Text style={[styles.name, line.checked && styles.done]}>
           {line.name}
+          {amount ? <Text style={styles.amount}>{`  ·  ${amount}`}</Text> : null}
         </Text>
-        {line.need || line.have ? (
-          <Text variant="small">
-            {line.need ? `need ${line.need}` : ''}
-            {line.need && line.have ? ' · ' : ''}
-            {line.have ? `you have ${line.have}` : ''}
+        {why ? <Text variant="small">{why}</Text> : null}
+        {line.have ? <Text variant="small">{`You have ${line.have} to use up`}</Text> : null}
+        {line.note ? <Badge label={line.note} tone="info" style={styles.note} /> : null}
+      </View>
+      {onRemove ? (
+        <Button
+          label="Remove"
+          accessibilityLabel={`Remove ${line.name}`}
+          variant="ghost"
+          small
+          onPress={onRemove}
+        />
+      ) : null}
+      {onMoveTo ? (
+        <View
+          {...pan.panHandlers}
+          accessibilityRole="button"
+          accessibilityLabel={`Drag to reorder ${line.name}`}
+          style={styles.handle}
+        >
+          <Text variant="bodyStrong" style={styles.grip}>
+            ⠿
           </Text>
-        ) : null}
-        {line.note ? <Badge label={line.note} tone="info" /> : null}
-      </View>
-      <View style={styles.move}>
-        {onRemove ? (
-          <Button
-            label="Remove"
-            accessibilityLabel={`Remove ${line.name}`}
-            variant="ghost"
-            small
-            onPress={onRemove}
-          />
-        ) : null}
-      </View>
+        </View>
+      ) : null}
     </View>
   )
 }
 
 const styles = StyleSheet.create({
+  flex: { flex: 1 },
+  page: { gap: space.lg },
+  chips: { flexDirection: 'row', flexWrap: 'wrap', gap: space.sm },
+  section: { gap: space.sm },
+  heading: { paddingHorizontal: space.xs },
+  group: { backgroundColor: colors.surface, borderRadius: radius.card, overflow: 'hidden' },
+  sep: { borderBottomWidth: 1, borderBottomColor: colors.separator },
+  fold: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: space.sm,
+    paddingHorizontal: space.lg,
+    paddingVertical: space.md,
+    minHeight: 48,
+  },
+  chev: { fontSize: fontSize.xl },
+  chevOpen: { transform: [{ rotate: '90deg' }] },
   row: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: space.sm,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.line,
+    paddingLeft: space.lg,
+    paddingRight: space.sm,
     paddingVertical: space.xs,
   },
-  main: { flex: 1, gap: 4, paddingVertical: space.xs },
+  main: { flex: 1, gap: 2, paddingVertical: space.xs },
+  name: {
+    fontFamily: fonts.bodySemiBold,
+    fontSize: fontSize.md,
+    lineHeight: 21,
+    color: colors.ink,
+  },
+  amount: { fontFamily: fonts.body, color: colors.muted },
   done: { textDecorationLine: 'line-through', color: colors.muted },
-  move: { flexDirection: 'row' },
+  note: { marginTop: 2 },
   handle: {
-    paddingHorizontal: space.xs,
+    paddingHorizontal: space.sm,
     paddingVertical: space.sm,
     ...(Platform.OS === 'web'
       ? ({ cursor: 'grab', touchAction: 'none', userSelect: 'none' } as object)
@@ -239,4 +451,5 @@ const styles = StyleSheet.create({
   },
   grip: { color: colors.muted },
   add: { flexDirection: 'row', gap: space.sm, alignItems: 'flex-end', flexWrap: 'wrap' },
+  addField: { flex: 1, minWidth: 200 },
 })

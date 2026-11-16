@@ -38,6 +38,11 @@ export function weekdayName(iso: ISODate, short = false): string {
   const n = DAYS[weekday(iso)]
   return short && n !== 'שבת' ? n.slice(0, 3) : n
 }
+/** Weekday in English even for Saturday, which `weekdayName` gives as the Hebrew word: "Sat" / "Saturday". */
+export function weekdayEnglish(iso: ISODate, short = false): string {
+  const n = weekday(iso) === 6 ? 'Saturday' : DAYS[weekday(iso)]
+  return short ? n.slice(0, 3) : n
+}
 export function monthName(m: number): string {
   return MONTHS[m]
 }

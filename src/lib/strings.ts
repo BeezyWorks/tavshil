@@ -66,6 +66,32 @@ export const NAV_MENU = {
 
 export const NEXT_PREP = 'Next prep'
 
+/** The Prep screen. */
+export const PREP = {
+  title: 'Prep',
+  empty: 'Add dishes to a meal and its prep appears here, worked back from when you serve.',
+  nothing: 'Nothing to prep for this pick.',
+  pick: 'Pick one or more meals. None picked shows everything.',
+  everything: 'Everything coming up',
+  left: (n: number) => (n === 1 ? '1 task left' : `${n} tasks left`),
+  passive: 'Passive',
+  sitsUntil: (t: string) => `Passive · until ${t}`,
+  guessed: '30 min guessed · Add times',
+  cook: 'Cooking mode',
+} as const
+
+/** The Shopping screen. */
+export const SHOP = {
+  title: 'Shopping',
+  useSoon: 'Use soon',
+  empty:
+    'Nothing to buy yet. Add dishes to a meal and its ingredients appear here, or add your own.',
+  nothing: 'Nothing to buy for this pick.',
+  pantry: 'Probably in the pantry',
+  cart: 'In the cart',
+  add: 'Add something',
+} as const
+
 export const USE_SOON_LINK = {
   label: 'Use soon',
   subtitle: 'What to use up before it goes bad',
