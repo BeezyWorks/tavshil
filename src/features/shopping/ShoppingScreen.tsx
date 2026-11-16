@@ -7,6 +7,7 @@ import {
   Card,
   Checkbox,
   Empty,
+  ListRow,
   Loading,
   Screen,
   Text,
@@ -15,6 +16,7 @@ import {
 import { api } from '@/lib/api/client'
 import { useOptimisticMutation, useShopping } from '@/lib/api/hooks'
 import type { ShoppingLine } from '@/lib/api/types'
+import { USE_SOON_LINK } from '@/lib/strings'
 import { colors, space } from '@/theme/tokens'
 
 export function ShoppingScreen() {
@@ -70,6 +72,15 @@ export function ShoppingScreen() {
       title="Shopping list"
       subtitle="Totals across your accepted meals, minus what you already have to use up. Drag the handle to match your route."
     >
+      {/* Use soon lives under Shopping now; this becomes a filter chip in the Shopping redesign. */}
+      <Card>
+        <ListRow
+          title={USE_SOON_LINK.label}
+          subtitle={USE_SOON_LINK.subtitle}
+          href={USE_SOON_LINK.href}
+          last
+        />
+      </Card>
       {isLoading || !data ? (
         <Loading />
       ) : (
