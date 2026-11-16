@@ -41,7 +41,15 @@ export function ShoppingScreen() {
     key: ['shopping'],
     apply: (old: ShoppingLine[], n) => [
       ...old,
-      { id: `pending:${n}`, name: n, need: '', checked: false, custom: true },
+      {
+        id: `pending:${n}`,
+        name: n,
+        need: '',
+        checked: false,
+        custom: true,
+        meals: [],
+        staple: false,
+      },
     ],
     fromResult: (lines) => lines,
   })

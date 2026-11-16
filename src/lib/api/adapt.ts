@@ -35,6 +35,7 @@ import {
   type PantryList,
   type Person,
   type PrepDay,
+  type PrepTask,
   type Reason,
   type Recipe,
   type RecipeFilters,
@@ -237,14 +238,12 @@ function holidayOf(name: string, kind?: 'jewish' | 'civil'): CalendarHoliday {
 export interface ServerChip {
   id: string
   name: string
-  status: 'draft' | 'accepted'
   kind: string | null
   itemCount: number
 }
 export const adaptChip = (m: ServerChip): MealChip => ({
   id: m.id,
   name: m.name,
-  status: m.status,
   kind: asKindOrNull(m.kind),
   itemCount: m.itemCount,
 })
@@ -368,7 +367,6 @@ export interface ServerMealDetail {
     name: string
     timeText: string | null
     kind: string | null
-    status: 'draft' | 'accepted'
     attendees: ServerAttendee[]
     notComing: ServerAttendee[]
     items: ServerItem[]
@@ -593,7 +591,6 @@ export function adaptMealDetail(d: ServerMealDetail): MealDetail {
     name: meal.name,
     kind,
     kindDeclared: !!declared,
-    status: meal.status,
     time: meal.timeText ?? '',
     notComing: meal.notComing.map((a) => a.personId),
     guestIds: meal.attendees.filter((a) => a.isGuest).map((a) => a.personId),
@@ -986,6 +983,17 @@ interface ServerShoppingLine {
   checked: boolean
   note: string | null
   sourcingNotes: string[]
+  meals?: {
+    mealId: string
+    name: string
+    date: string
+    dishes: string[]
+    amount: string
+    selected: boolean
+  }[]
+  buyBy?: string | null
+  staple?: boolean
+  total?: { text: string } | null
 }
 
 export function adaptShopping(lines: ServerShoppingLine[]): ShoppingLine[] {
@@ -999,23 +1007,85 @@ export function adaptShopping(lines: ServerShoppingLine[]): ShoppingLine[] {
       note: [...l.sourcingNotes, l.note].filter(Boolean).join(' · ') || undefined,
       checked: l.checked,
       custom: l.manual || undefined,
+      meals: (l.meals ?? []).map((m) => ({
+        mealId: m.mealId,
+        name: m.name,
+        date: m.date,
+        dishes: m.dishes,
+        amount: m.amount,
+        selected: m.selected,
+      })),
+      buyBy: l.buyBy ?? undefined,
+      staple: !!l.staple,
+      total: l.total?.text || undefined,
     }))
+}
+
+interface ServerPrepTask {
+  key: string
+  mealId: string
+  mealLabel: string | null
+  mealDate: string | null
+  mealTimeText: string | null
+  label: string
+  dish: string
+  dishId?: string
+  recipeId: string | null
+  versionId: string | null
+  guessedTimes: boolean
+  kind: 'active' | 'passive' | 'setup'
+  startText: string | null
+  endText: string | null
+  endDate?: string
+  notes: string[]
+  done: boolean
 }
 
 interface ServerPrepDay {
   date: string
+  hebrew?: string
   holidays: string[]
   notes: string[]
-  meals: { mealId: string; label: string }[]
-  tasks: {
-    mealId: string
+  candleLightingText?: string | null
+  restDay?: boolean
+  rest?: {
+    kind: 'shabbat' | 'yomtov' | 'yomtov_shabbat'
     label: string
-    dish: string
-    kind: 'active' | 'passive' | 'setup'
-    startText: string | null
-    notes: string[]
-  }[]
+    startsAtText: string | null
+    handsOnEndsAtText: string | null
+    endsDate: string
+    endsAtText: string | null
+  } | null
+  meals: { mealId: string; label: string; timeText?: string | null }[]
+  tasks: ServerPrepTask[]
   flags: { text: string }[]
+}
+
+export function adaptPrepTask(t: ServerPrepTask, mealName?: string): PrepTask {
+  return {
+    id: t.key,
+    time: clock12(t.startText),
+    ...(t.endText && { endTime: clock12(t.endText) }),
+    ...(t.endDate && { endDate: t.endDate }),
+    text:
+      t.dish && !t.label.toLowerCase().includes(t.dish.toLowerCase())
+        ? `${t.label} (${t.dish})`
+        : t.label,
+    label: t.label,
+    dish: t.dish,
+    kind: t.kind,
+    passive: t.kind === 'passive' || undefined,
+    mealId: t.mealId || null,
+    mealName: t.mealLabel ?? mealName ?? '',
+    ...(t.mealDate && { mealDate: t.mealDate }),
+    ...(t.mealTimeText && { mealTime: clock12(t.mealTimeText) }),
+    ...(t.dishId && { itemId: t.dishId }),
+    ...(t.recipeId && { recipeId: t.recipeId }),
+    ...(t.versionId && { versionId: t.versionId }),
+    guessedTimes: !!t.guessedTimes,
+    notes: t.notes,
+    done: !!t.done,
+  }
 }
 
 export function adaptPrep(days: ServerPrepDay[]): PrepDay[] {
@@ -1025,17 +1095,27 @@ export function adaptPrep(days: ServerPrepDay[]): PrepDay[] {
       id: d.date,
       label: weekdayName(d.date),
       date: d.date,
-      tasks: d.tasks.map((t, i) => ({
-        id: `${d.date}-${i}`,
-        time: clock12(t.startText),
-        text:
-          t.dish && !t.label.toLowerCase().includes(t.dish.toLowerCase())
-            ? `${t.label} (${t.dish})`
-            : t.label,
-        mealName: mealName(t.mealId),
-        passive: t.kind === 'passive' || undefined,
+      ...(d.hebrew && { hebrew: shortHebrew(d.hebrew) }),
+      tasks: d.tasks.map((t) => adaptPrepTask(t, mealName(t.mealId))),
+      meals: d.meals.map((m) => ({
+        mealId: m.mealId,
+        name: m.label,
+        time: clock12(m.timeText ?? null),
       })),
       note: [...d.notes, ...d.flags.map((f) => f.text)].join('. ') || undefined,
+      ...(d.flags.length && { flags: d.flags.map((f) => f.text) }),
+      ...(d.candleLightingText && { candleLighting: clock12(d.candleLightingText) }),
+      ...(d.rest && {
+        rest: {
+          kind: d.rest.kind,
+          label: d.rest.label,
+          handsOnEnds: clock12(d.rest.handsOnEndsAtText),
+          candleLighting: clock12(d.rest.startsAtText),
+          untilDate: d.rest.endsDate,
+          until: clock12(d.rest.endsAtText),
+        },
+      }),
+      ...(d.restDay && { restDay: true }),
     }
   })
 }

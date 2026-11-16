@@ -24,7 +24,7 @@ import {
   type ServerPeople,
   type ServerPersonView,
 } from './adapt'
-import type { AcceptResult, TavshilApi } from './client'
+import type { TavshilApi } from './client'
 import { ApiError, http } from './http'
 import type {
   Course,
@@ -251,7 +251,7 @@ export const realApi: TavshilApi = {
           }[]
         }
       })[]
-    }>('/calendar', { from, to, includeDrafts: true })
+    }>('/calendar', { from, to })
     return cal.days.map((d) =>
       adaptDay(
         d,
@@ -331,18 +331,6 @@ export const realApi: TavshilApi = {
   suggestMenu: async (id) => {
     await http.post(`/meals/${id}/suggest-menu`, { apply: true })
     return meal(id)
-  },
-
-  acceptMeals: async (mealIds): Promise<AcceptResult> => {
-    const r = await http.post<{
-      accepted: { id: string }[]
-      blocked: { id: string; name: string; problems: string[] }[]
-    }>('/meals/accept', { mealIds })
-    return { accepted: r.accepted.map((a) => a.id), blocked: r.blocked }
-  },
-
-  reopenMeals: async (mealIds) => {
-    await http.post('/meals/reopen', { mealIds })
   },
 
   // ---- Recipes ----
@@ -596,9 +584,13 @@ export const realApi: TavshilApi = {
   },
 
   // ---- Shopping, prep, pantry ----
-  getShoppingList: async () =>
+  getShoppingList: async (mealIds) =>
     adaptShopping(
-      (await http.get<{ lines: Parameters<typeof adaptShopping>[0] }>('/shopping')).lines,
+      (
+        await http.get<{ lines: Parameters<typeof adaptShopping>[0] }>('/shopping', {
+          mealIds: mealIds?.length ? mealIds : undefined,
+        })
+      ).lines,
     ),
 
   setShoppingChecked: (key, checked) => patchShopping({ check: [{ key, checked }] }),
@@ -613,6 +605,10 @@ export const realApi: TavshilApi = {
       to: addDays(today, 60),
     })
     return adaptPrep(r.days)
+  },
+
+  setPrepDone: async (marks) => {
+    await http.post('/prep/done', { marks })
   },
 
   getPantry: async () => adaptPantry(await http.get('/pantry')),

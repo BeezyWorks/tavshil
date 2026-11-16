@@ -75,6 +75,7 @@ let meals: Meal[] = buildMeals()
 let pantry: PantryRow[] = buildPantry()
 let collections: Collection[] = [...DEFAULT_COLLECTIONS]
 const shop = { checked: new Set<string>(), order: [] as string[], custom: [] as ShoppingLine[] }
+const prepDone = new Set<string>()
 let seq = 100
 
 const PESACH_2027 = ['2027-04-21', '2027-04-29']
@@ -350,7 +351,7 @@ function buildReview(m: Meal): MealReview {
   const need = aggregate([m])
   const toBuy = need.filter((n) => n.remaining > 0).length
   const next = meals
-    .filter((x) => x.id !== m.id && mealKey(x) > mealKey(m) && x.status === 'draft')
+    .filter((x) => x.id !== m.id && mealKey(x) > mealKey(m) && !x.items.length)
     .sort((a, b) => (mealKey(a) < mealKey(b) ? -1 : 1))[0]
   return {
     handsOnMin: m.items.filter((i) => !i.broughtBy).reduce((n, i) => n + i.activeMin, 0),
@@ -414,6 +415,8 @@ interface Need {
   flags: Set<string>
   people: Person[]
   meals: string[]
+  /** Per meal: its dishes that use it and how much. */
+  byMeal: Map<Id, { meal: Meal; dishes: string[]; itemIds: Id[]; amount: number }>
   soon?: ISODate
 }
 
@@ -438,8 +441,16 @@ function aggregate(from: Meal[]): Need[] {
             flags: new Set(),
             people: [],
             meals: [],
+            byMeal: new Map(),
           } as Need)
         n.total += l.amount * it.scale
+        const per = n.byMeal.get(m.id) ?? { meal: m, dishes: [], itemIds: [], amount: 0 }
+        per.amount += l.amount * it.scale
+        if (!per.itemIds.includes(it.id)) {
+          per.itemIds.push(it.id)
+          per.dishes.push(it.title)
+        }
+        n.byMeal.set(m.id, per)
         l.flags.forEach((f) => n.flags.add(f))
         attendees(m).forEach((p) => !n.people.includes(p) && n.people.push(p))
         if (!n.meals.includes(m.name)) n.meals.push(m.name)
@@ -487,24 +498,65 @@ function sourcingNote(n: Need): string | undefined {
 const fmt = (n: { unit: 'g' | 'ml' | 'pc'; density?: number }, amount: number) =>
   formatAmount({ amount, unit: n.unit, density: n.density }, 1, 'metric').text
 
-function shoppingLines(): ShoppingLine[] {
-  const accepted = meals.filter((m) => m.status === 'accepted')
-  const lines: ShoppingLine[] = aggregate(accepted)
-    .filter((n) => n.remaining > 0)
-    .map((n) => ({
-      id: `sl-${n.key.replace(/[^a-z0-9]+/g, '-')}`,
-      name: n.name,
-      need: fmt(n, n.remaining),
-      have: n.have > 0 ? fmt(n, n.have) : undefined,
-      note: sourcingNote(n),
-      checked: shop.checked.has(`sl-${n.key.replace(/[^a-z0-9]+/g, '-')}`),
-    }))
-  const all = [...lines, ...shop.custom.map((l) => ({ ...l, checked: shop.checked.has(l.id) }))]
+const STAPLE =
+  /^(kosher |sea |table )?salt$|^(black |white )?pepper$|^(vegetable |canola |olive |sunflower )?oil$|^(brown |white )?sugar$|flour$|^baking (powder|soda)$|vinegar$|^soy sauce$|^honey$|^(sweet |smoked )?paprika$|^(ground )?(cumin|turmeric|cinnamon|ginger|nutmeg)$|^(garlic|onion) powder$|^vanilla( extract)?$/i
+
+/** Meals with dishes count for shopping, prep and holds (there is no accepting step). */
+const planned = () => meals.filter((m) => m.items.length > 0)
+
+function shoppingLines(mealIds?: Id[]): ShoppingLine[] {
+  const filter = mealIds?.length ? new Set(mealIds) : null
+  const all = aggregate(planned())
+  const firstTask = new Map<Id, ISODate>()
+  for (const t of planned().flatMap(scheduleMeal))
+    if (t.itemId && (!firstTask.has(t.itemId) || t.date < firstTask.get(t.itemId)!))
+      firstTask.set(t.itemId, t.date)
+  const lines: ShoppingLine[] = all
+    .map((n) => {
+      const per = [...n.byMeal.values()].sort((a, b) =>
+        mealKey(a.meal) < mealKey(b.meal) ? -1 : 1,
+      )
+      const mine = filter ? per.filter((p) => filter.has(p.meal.id)) : per
+      const amount = mine.reduce((s, p) => s + p.amount, 0)
+      const remaining = filter ? amount : n.remaining
+      const buyBy = mine
+        .flatMap((p) => [p.meal.date, ...p.itemIds.map((i) => firstTask.get(i) ?? p.meal.date)])
+        .sort()[0]
+      const id = `sl-${n.key.replace(/[^a-z0-9]+/g, '-')}`
+      return {
+        mine,
+        remaining,
+        line: {
+          id,
+          name: n.name,
+          need: fmt(n, remaining),
+          have: !filter && n.have > 0 ? fmt(n, n.have) : undefined,
+          note: sourcingNote(n),
+          checked: shop.checked.has(id),
+          meals: per.map((p) => ({
+            mealId: p.meal.id,
+            name: p.meal.name,
+            date: p.meal.date,
+            dishes: p.dishes,
+            amount: fmt(n, p.amount),
+            selected: !filter || filter.has(p.meal.id),
+          })),
+          buyBy,
+          staple: STAPLE.test(n.name.trim()),
+          total: filter && mine.length < per.length ? fmt(n, n.total) : undefined,
+        } satisfies ShoppingLine,
+      }
+    })
+    .filter((x) => x.mine.length > 0 && x.remaining > 0)
+    .map((x) => x.line)
+  const withCustom = filter
+    ? lines
+    : [...lines, ...shop.custom.map((l) => ({ ...l, checked: shop.checked.has(l.id) }))]
   const rank = (id: string) => {
     const i = shop.order.indexOf(id)
     return i < 0 ? 1e6 : i
   }
-  return all
+  return withCustom
     .map((l, i) => ({ l, i }))
     .sort((a, b) => rank(a.l.id) - rank(b.l.id) || a.i - b.i)
     .map((x) => x.l)
@@ -513,12 +565,19 @@ function shoppingLines(): ShoppingLine[] {
 // ---- Cooking schedule ----
 
 interface Scheduled {
+  key: string
   date: ISODate
   time: string
   text: string
+  label: string
   passive: boolean
   mealId: Id
   mealName: string
+  mealTime: string
+  itemId?: Id
+  dish: string
+  recipeId?: Id
+  versionId?: Id
 }
 
 function shift(date: ISODate, time: string, deltaMin: number): { date: ISODate; time: string } {
@@ -555,22 +614,34 @@ function scheduleMeal(m: Meal): Scheduled[] {
     if (!v || it.broughtBy) continue
     const long = shabbat && v.holdsOnBlech && v.totalMin > 300
     const start = shift(deadline.date, deadline.time, -(long ? v.activeMin : v.totalMin))
-    out.push({
-      ...start,
-      text: `${long ? 'Start' : 'Cook'} ${it.title.toLowerCase()} (${v.activeMin} min hands-on${long ? ', then it stays on the blech' : ''})`,
-      passive: false,
+    const about = {
       mealId: m.id,
       mealName: m.name,
+      mealTime: m.time,
+      itemId: it.id,
+      dish: it.title,
+      recipeId: it.recipeId,
+      versionId: it.versionId,
+    }
+    const text = `${long ? 'Start' : 'Cook'} ${it.title.toLowerCase()} (${v.activeMin} min hands-on${long ? ', then it stays on the blech' : ''})`
+    out.push({
+      ...start,
+      ...about,
+      key: `${m.id}:${it.id}:cook`,
+      text,
+      label: text,
+      passive: false,
     })
     for (const pre of v.prePrep) {
       let p = shift(start.date, start.time, -pre.leadHours * 60)
       if (p.time < '07:00') p = { date: addDays(p.date, -1), time: '21:00' }
       out.push({
         ...p,
+        ...about,
+        key: `${m.id}:${it.id}:pre:${pre.text.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`,
         text: `${pre.text} (${pre.leadHours} h)`,
+        label: `${pre.text} (${pre.leadHours} h)`,
         passive: pre.passive,
-        mealId: m.id,
-        mealName: m.name,
       })
     }
   }
@@ -792,7 +863,7 @@ function matchesFilters(r: Recipe, f: RecipeFilters): boolean {
 // ---- Calendar ----
 
 function chip(m: Meal): MealChip {
-  return { id: m.id, name: m.name, status: m.status, kind: m.kind, itemCount: m.items.length }
+  return { id: m.id, name: m.name, kind: m.kind, itemCount: m.items.length }
 }
 
 function calendarDay(date: ISODate): CalendarDay {
@@ -900,7 +971,6 @@ export const mockApi: TavshilApi = {
       date,
       name: name.trim() || 'Meal',
       kind: n.includes('shlishit') ? 'dairy' : 'meat',
-      status: 'draft',
       time: defaultTime(name, date),
       notComing: [],
       guestIds: [],
@@ -973,14 +1043,6 @@ export const mockApi: TavshilApi = {
     return delay(mealDetail(id))
   },
 
-  acceptMeals: async (ids) => {
-    for (const id of ids) mealById(id).status = 'accepted'
-    return delay({ accepted: ids, blocked: [] })
-  },
-  reopenMeals: async (ids) => {
-    for (const id of ids) mealById(id).status = 'draft'
-    return delay(undefined)
-  },
   deleteMeal: async (id) => {
     meals = meals.filter((m) => m.id !== id)
     mockPlan.deleteMeal(id)
@@ -1092,7 +1154,7 @@ export const mockApi: TavshilApi = {
     return delay(undefined)
   },
 
-  getShoppingList: () => delay(shoppingLines()),
+  getShoppingList: (mealIds) => delay(shoppingLines(mealIds)),
   setShoppingChecked: async (id, checked) => {
     if (checked) shop.checked.add(id)
     else shop.checked.delete(id)
@@ -1107,13 +1169,21 @@ export const mockApi: TavshilApi = {
     return delay(shoppingLines())
   },
   addShoppingLine: async (name) => {
-    shop.custom.push({ id: nextId('sl-custom'), name, need: '', checked: false, custom: true })
+    shop.custom.push({
+      id: nextId('sl-custom'),
+      name,
+      need: '',
+      checked: false,
+      custom: true,
+      meals: [],
+      staple: false,
+    })
     return delay(shoppingLines())
   },
 
   getPrepSchedule: async () => {
-    const accepted = meals.filter((m) => m.status === 'accepted')
-    const tasks = accepted.flatMap(scheduleMeal)
+    const withDishes = planned()
+    const tasks = withDishes.flatMap(scheduleMeal)
     const groups = new Map<string, PrepDay>()
     for (const t of tasks) {
       const night = t.time >= '20:00'
@@ -1125,22 +1195,47 @@ export const mockApi: TavshilApi = {
           label: `${weekdayName(t.date)}${night ? ' night' : ''}`,
           date: t.date,
           tasks: [],
-        } as PrepDay)
+          meals: [],
+        } satisfies PrepDay)
       const task: PrepTask = {
-        id: `${key}-${g.tasks.length}`,
+        id: t.key,
         time: clock12(t.time),
         text: t.text,
-        mealName: t.mealName,
+        label: t.label,
+        dish: t.dish,
+        kind: t.passive ? 'passive' : 'active',
         passive: t.passive,
+        mealId: t.mealId,
+        mealName: t.mealName,
+        mealTime: clock12(t.mealTime),
+        ...(t.itemId && { itemId: t.itemId }),
+        ...(t.recipeId && { recipeId: t.recipeId }),
+        ...(t.versionId && { versionId: t.versionId }),
+        guessedTimes: false,
+        notes: [],
+        done: prepDone.has(t.key),
       }
       g.tasks.push(task)
+      for (const m of withDishes.filter((x) => x.date === t.date))
+        if (!g.meals.some((x) => x.mealId === m.id))
+          g.meals.push({ mealId: m.id, name: m.name, time: clock12(m.time) })
       groups.set(key, g)
     }
     const days = [...groups.values()].sort((a, b) => (a.id < b.id ? -1 : 1))
     for (const d of days)
-      if (weekday(d.date) === 5 && !d.id.endsWith('n') && accepted.some(isShabbatMeal))
+      if (weekday(d.date) === 5 && !d.id.endsWith('n') && withDishes.some(isShabbatMeal)) {
         d.note = `Candle lighting is ${clock12(CANDLES)}. Hands-on cooking is finished by ${clock12('15:30')}.`
-    for (const m of accepted.filter(isShabbatMeal)) {
+        d.candleLighting = clock12(CANDLES)
+        d.rest = {
+          kind: 'shabbat',
+          label: 'Shabbat',
+          handsOnEnds: clock12('15:30'),
+          candleLighting: clock12(CANDLES),
+          untilDate: addDays(d.date, 1),
+          until: clock12('17:30'),
+        }
+      }
+    for (const m of withDishes.filter(isShabbatMeal)) {
       const sat = weekday(m.date) === 6 ? m.date : addDays(m.date, 1)
       if (!days.some((d) => d.id === `${sat}-shabbat`))
         days.push({
@@ -1148,6 +1243,8 @@ export const mockApi: TavshilApi = {
           label: 'Shabbat',
           date: sat,
           tasks: [],
+          meals: [],
+          restDay: true,
           note: 'Nothing scheduled over Shabbat. Passive cooking, like the cholent, carries on by itself.',
         })
     }
@@ -1156,10 +1253,17 @@ export const mockApi: TavshilApi = {
     )
   },
 
+  setPrepDone: async (marks) => {
+    for (const m of marks) {
+      if (m.done) prepDone.add(m.key)
+      else prepDone.delete(m.key)
+    }
+    return delay(undefined)
+  },
+
   getPantry: async (): Promise<PantryList> => {
     const heldBy = new Map<string, string[]>()
-    for (const n of aggregate(meals.filter((m) => m.status === 'accepted')))
-      heldBy.set(n.name.toLowerCase(), n.meals)
+    for (const n of aggregate(planned())) heldBy.set(n.name.toLowerCase(), n.meals)
     return delay({
       today: TODAY,
       items: [...pantry]

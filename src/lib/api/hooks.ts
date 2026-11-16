@@ -18,6 +18,7 @@ import type {
   MealPatch,
   NewMealInput,
   PickableHousehold,
+  PrepDay,
   Recipe,
   RecipeFilters,
   VersionEdit,
@@ -143,8 +144,14 @@ export function useGuestPool(): PickableHousehold[] {
 }
 export const usePerson = (id: Id) =>
   useQuery({ queryKey: ['person', id], queryFn: () => api.getPerson(id) })
-export const useShopping = () =>
-  useQuery({ queryKey: ['shopping'], queryFn: () => api.getShoppingList() })
+/** The whole list under `['shopping']`; with `mealIds`, just those meals' amounts (under `['shopping', ...ids]`). */
+export const useShopping = (mealIds?: Id[]) => {
+  const ids = mealIds?.length ? [...mealIds].sort() : []
+  return useQuery({
+    queryKey: ids.length ? ['shopping', ...ids] : ['shopping'],
+    queryFn: () => api.getShoppingList(ids.length ? ids : undefined),
+  })
+}
 export const usePrep = () => useQuery({ queryKey: ['prep'], queryFn: () => api.getPrepSchedule() })
 export const useKitchen = () => useQuery({ queryKey: ['kitchen'], queryFn: () => api.getKitchen() })
 export const usePantry = () => useQuery({ queryKey: ['pantry'], queryFn: () => api.getPantry() })
@@ -162,14 +169,12 @@ export const useToday = (): ISODate | undefined => useHouseholdInfo().data?.toda
  * refetch the whole app.
  */
 export const stale = {
-  /** A meal's name, kind, guests or status; the plan screens show it. */
+  /** A meal's name, kind or guests; the plan screens show it. */
   meal: [['meal'], ['calendar'], ['upcoming']],
   /** Who is coming or what kind of meal: the brief and the picker change, the lists do not. */
   who: [['meal'], ['calendar'], ['upcoming'], ['suggestions']],
-  /** A menu change: the meal, its suggestions, and everything that depends on accepted menus. */
+  /** A menu change: the meal, its suggestions, and everything that depends on menus. */
   menu: [['meal'], ['calendar'], ['upcoming'], ['suggestions'], ['shopping'], ['prep'], ['pantry']],
-  /** Accepting or reopening holds pantry items and schedules the cooking. */
-  accept: [['meal'], ['calendar'], ['upcoming'], ['shopping'], ['prep'], ['pantry']],
   /** Anything on the Plan tab or a hosted page: weeks, runs, hosted rows, recipe searches for a meal. */
   plan: [
     ['plan'],
@@ -209,6 +214,8 @@ export const stale = {
   ],
   collections: [['collections']],
   shopping: [['shopping']],
+  /** Done marks only change the prep list (and the next-task line the tabs show). */
+  prep: [['prep']],
   pantry: [['pantry'], ['shopping'], ['suggestions']],
   kitchen: [['kitchen']],
   settings: [['info'], ['prefs'], ['calendar'], ['upcoming'], ['prep']],
@@ -266,6 +273,23 @@ export function useOptimisticMutation<A, R, T>(opts: {
     },
   })
 }
+
+/**
+ * Tick prep tasks off (or back on) by task id. The list updates at once; a quick run of ticks refetches once
+ * they have all landed.
+ */
+export const useSetPrepDone = () =>
+  useOptimisticMutation({
+    fn: (marks: { key: Id; done: boolean }[]) => api.setPrepDone(marks),
+    key: ['prep'],
+    apply: (old: PrepDay[], marks) => {
+      const done = new Map(marks.map((m) => [m.key, m.done]))
+      return old.map((d) => ({
+        ...d,
+        tasks: d.tasks.map((t) => (done.has(t.id) ? { ...t, done: done.get(t.id)! } : t)),
+      }))
+    },
+  })
 
 /** Replaces one meal inside a cached hosted page, or a cached single meal. */
 function patchMeal(qc: QueryClient, mealId: Id, edit: (m: HostedMeal) => HostedMeal) {
