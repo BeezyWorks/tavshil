@@ -29,12 +29,45 @@ export function dishName(title: string, version?: string | null): string {
   return v.includes('(') ? `${title}: ${v}` : `${title} (${v})`
 }
 
-export const NAV = [
-  { href: '/', label: 'Plan' },
-  { href: '/recipes', label: 'Recipes' },
-  { href: '/shopping', label: 'Shopping' },
-  { href: '/prep', label: 'Prep' },
-  { href: '/people', label: 'People' },
-  { href: '/use-soon', label: 'Use soon' },
-  { href: '/settings', label: 'Settings' },
-] as const
+/** The app's sections. The tabs and the web nav pick from these. */
+export const NAV = {
+  plan: { href: '/', label: 'Plan' },
+  shopping: { href: '/shopping', label: 'Shopping' },
+  prep: { href: '/prep', label: 'Prep' },
+  recipes: { href: '/recipes', label: 'Recipes' },
+  people: { href: '/people', label: 'People' },
+  more: { href: '/more', label: 'More' },
+} as const
+
+/** The web gear menu and the More screen. */
+export const NAV_MENU = {
+  title: 'Settings, kitchen and about',
+  people: {
+    href: '/people',
+    label: 'People',
+    subtitle: 'Your household, guests and what each can eat',
+  },
+  kitchen: {
+    href: '/kitchen',
+    label: 'Kitchen',
+    subtitle: 'Pots, pans and appliances, and what each is kept for',
+  },
+  settings: {
+    href: '/settings',
+    label: 'Settings',
+    subtitle: 'Household, units, API keys and connecting your AI',
+  },
+  about: {
+    href: '/about',
+    label: 'About and support',
+    subtitle: 'Contact us, the privacy policy and deleting your account',
+  },
+} as const
+
+export const NEXT_PREP = 'Next prep'
+
+export const USE_SOON_LINK = {
+  label: 'Use soon',
+  subtitle: 'What to use up before it goes bad',
+  href: '/use-soon',
+}
