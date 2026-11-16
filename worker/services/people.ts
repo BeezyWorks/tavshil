@@ -122,18 +122,20 @@ export async function loadEffectivePeopleOnDates(
   const linkOf = new Map(links.map((l) => [l.ghostPersonId, l]))
   const sourceIds = ids.map((id) => linkOf.get(id)?.realPersonId ?? id)
   const allIds = [...new Set([...ids, ...sourceIds])]
-  const cons = await inChunks(allIds, (part) =>
-    db
-      .select()
-      .from(s.constraints)
-      .where(and(inArray(s.constraints.personId, part), isNull(s.constraints.deletedAt))),
-  )
-  const rules = await inChunks(allIds, (part) =>
-    db
-      .select()
-      .from(s.personRules)
-      .where(and(inArray(s.personRules.personId, part), isNull(s.personRules.deletedAt))),
-  )
+  const [cons, rules] = await Promise.all([
+    inChunks(allIds, (part) =>
+      db
+        .select()
+        .from(s.constraints)
+        .where(and(inArray(s.constraints.personId, part), isNull(s.constraints.deletedAt))),
+    ),
+    inChunks(allIds, (part) =>
+      db
+        .select()
+        .from(s.personRules)
+        .where(and(inArray(s.personRules.personId, part), isNull(s.personRules.deletedAt))),
+    ),
+  ])
   const build = (day: string): EffectivePerson[] => {
     const result: EffectivePerson[] = []
     for (const id of personIds) {
@@ -214,18 +216,20 @@ export async function loadPersonViews(db: Db, actor: Actor, personIds: string[])
   )
   const linkOf = new Map(links.map((l) => [l.ghostPersonId, l]))
   const allIds = [...new Set([...ids, ...links.map((l) => l.realPersonId)])]
-  const cons = await inChunks(allIds, (part) =>
-    db
-      .select()
-      .from(s.constraints)
-      .where(and(inArray(s.constraints.personId, part), isNull(s.constraints.deletedAt))),
-  )
-  const rules = await inChunks(allIds, (part) =>
-    db
-      .select()
-      .from(s.personRules)
-      .where(and(inArray(s.personRules.personId, part), isNull(s.personRules.deletedAt))),
-  )
+  const [cons, rules] = await Promise.all([
+    inChunks(allIds, (part) =>
+      db
+        .select()
+        .from(s.constraints)
+        .where(and(inArray(s.constraints.personId, part), isNull(s.constraints.deletedAt))),
+    ),
+    inChunks(allIds, (part) =>
+      db
+        .select()
+        .from(s.personRules)
+        .where(and(inArray(s.personRules.personId, part), isNull(s.personRules.deletedAt))),
+    ),
+  ])
   const notes = await inChunks(ids, (part) =>
     db
       .select()

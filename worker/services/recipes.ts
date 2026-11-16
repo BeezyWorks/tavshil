@@ -116,41 +116,44 @@ async function hydrate(
   rows: { version: LoadedVersion['version']; recipe: LoadedVersion['recipe'] }[],
 ): Promise<Map<string, LoadedVersion>> {
   const ids = rows.map((r) => r.version.id)
-  const lines = await inChunks(ids, (part) =>
-    db
-      .select()
-      .from(s.ingredientLines)
-      .where(and(inArray(s.ingredientLines.versionId, part), isNull(s.ingredientLines.deletedAt)))
-      .orderBy(asc(s.ingredientLines.position)),
-  )
-  const equipment = await inChunks(ids, (part) =>
-    db
-      .select()
-      .from(s.versionEquipment)
-      .where(
-        and(inArray(s.versionEquipment.versionId, part), isNull(s.versionEquipment.deletedAt)),
-      ),
-  )
-  const vdims = await inChunks(ids, (part) =>
-    db
-      .select({ vd: s.versionDimensions, dimension: s.dimensions })
-      .from(s.versionDimensions)
-      .innerJoin(s.dimensions, eq(s.dimensions.id, s.versionDimensions.dimensionId))
-      .where(
-        and(
-          inArray(s.versionDimensions.versionId, part),
-          isNull(s.versionDimensions.deletedAt),
-          isNull(s.dimensions.deletedAt),
+  // Independent reads: one round trip instead of four.
+  const [lines, equipment, vdims, vtags] = await Promise.all([
+    inChunks(ids, (part) =>
+      db
+        .select()
+        .from(s.ingredientLines)
+        .where(and(inArray(s.ingredientLines.versionId, part), isNull(s.ingredientLines.deletedAt)))
+        .orderBy(asc(s.ingredientLines.position)),
+    ),
+    inChunks(ids, (part) =>
+      db
+        .select()
+        .from(s.versionEquipment)
+        .where(
+          and(inArray(s.versionEquipment.versionId, part), isNull(s.versionEquipment.deletedAt)),
         ),
-      ),
-  )
-  const vtags = await inChunks(ids, (part) =>
-    db
-      .select()
-      .from(s.versionTags)
-      .where(and(inArray(s.versionTags.versionId, part), isNull(s.versionTags.deletedAt)))
-      .orderBy(asc(s.versionTags.createdAt), asc(s.versionTags.id)),
-  )
+    ),
+    inChunks(ids, (part) =>
+      db
+        .select({ vd: s.versionDimensions, dimension: s.dimensions })
+        .from(s.versionDimensions)
+        .innerJoin(s.dimensions, eq(s.dimensions.id, s.versionDimensions.dimensionId))
+        .where(
+          and(
+            inArray(s.versionDimensions.versionId, part),
+            isNull(s.versionDimensions.deletedAt),
+            isNull(s.dimensions.deletedAt),
+          ),
+        ),
+    ),
+    inChunks(ids, (part) =>
+      db
+        .select()
+        .from(s.versionTags)
+        .where(and(inArray(s.versionTags.versionId, part), isNull(s.versionTags.deletedAt)))
+        .orderBy(asc(s.versionTags.createdAt), asc(s.versionTags.id)),
+    ),
+  ])
   const ingIds = unique(lines.map((l) => l.ingredientId).filter((x): x is string => !!x))
   const ings = await inChunks(ingIds, (part) =>
     db.select().from(s.ingredients).where(inArray(s.ingredients.id, part)),

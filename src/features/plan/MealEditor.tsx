@@ -11,16 +11,20 @@ import {
   useHostedMeal,
   useRemoveMealDish,
 } from '@/lib/api/hooks'
-import type { DaySlot, Id, ISODate, MealCard } from '@/lib/api/types'
+import type { DaySlot, Id, ISODate, MealCard, MealDish } from '@/lib/api/types'
 import { longDate } from '@/lib/dates'
 import { SLOT_LABEL } from '@/lib/plan'
-import { colors, radius, size, space } from '@/theme/tokens'
+import { colors, fonts, fontSize, radius, size, space } from '@/theme/tokens'
 
 import { Sheet } from './Sheet'
 
+type Mode = 'view' | 'add' | 'edit'
+
 /**
- * Fill a day's meal in place: add dishes from your recipes or by name. The meal is created on the first dish, so opening the
- * editor and closing it again leaves nothing behind.
+ * A day's everyday meal. A planned meal opens on what is for dinner: its dishes, each with its recipe and cooking
+ * mode, straight from the plan card (no loading). Adding and removing dishes are a tap away. An empty slot opens on
+ * the recipe search, unfocused. The meal is created on the first dish, so opening an empty slot and closing it again
+ * leaves nothing behind.
  */
 export function MealEditor({
   date,
@@ -40,7 +44,11 @@ export function MealEditor({
   const [mine, setMine] = useState<Id | null>(createdId ?? null)
   const added = useRef(0)
   const mealId = meal?.id ?? mine ?? undefined
-  const hm = useHostedMeal(mealId)
+  const planned = !!meal?.dishes.length
+  const [mode, setMode] = useState<Mode>(planned ? 'view' : 'add')
+  // The card already carries the dishes; the full meal is only needed once something changes.
+  const touched = useRef(false)
+  const hm = useHostedMeal(mealId, mode !== 'view' || touched.current || !meal)
   const create = useCreatePlanMeal()
   const add = useAddMealDish()
   const remove = useRemoveMealDish()
@@ -56,6 +64,7 @@ export function MealEditor({
   }
   const run = async (fn: () => Promise<unknown>) => {
     setError('')
+    touched.current = true
     try {
       await fn()
     } catch (e) {
@@ -67,6 +76,7 @@ export function MealEditor({
       const id = await ensure()
       await add.mutateAsync({ mealId: id, dish: { course: 'main', ...dish } })
       added.current += 1
+      setMode('view')
     })
   const close = async () => {
     // Remove a meal we made here that stayed empty.
@@ -76,74 +86,127 @@ export function MealEditor({
     }
     onClose()
   }
-  const dishes = hm.data?.menu.flatMap((c) => c.items) ?? []
+  const go = (href: string) => {
+    onClose()
+    router.push(href as Href)
+  }
+
+  const dishes: MealDish[] = hm.data
+    ? hm.data.menu.flatMap((c) =>
+        c.items.map((i) => ({
+          itemId: i.itemId,
+          title: i.title,
+          course: i.course,
+          recipeId: i.recipeId,
+          versionId: i.versionId,
+        })),
+      )
+    : (meal?.dishes ?? [])
+  const title = `${meal?.name ?? SLOT_LABEL[slot]} · ${longDate(date)}`
 
   return (
-    <Sheet title={`${meal?.name ?? SLOT_LABEL[slot]} · ${longDate(date)}`} onClose={close}>
+    <Sheet title={title} onClose={close}>
       {dishes.length ? (
         <View style={styles.list}>
           {dishes.map((d) => (
             <View key={d.itemId} style={styles.dish}>
-              {d.recipeId ? (
+              <Text style={styles.dishTitle} numberOfLines={2}>
+                {d.title}
+              </Text>
+              {mode === 'edit' ? (
                 <Pressable
-                  accessibilityRole="link"
-                  accessibilityLabel={`Open recipe: ${d.title}`}
-                  onPress={() => {
-                    onClose()
-                    router.push(`/recipes/${d.recipeId}` as Href)
-                  }}
-                  style={{ flex: 1, paddingVertical: space.sm }}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Remove ${d.title}`}
+                  onPress={() =>
+                    mealId && run(() => remove.mutateAsync({ mealId, itemId: d.itemId }))
+                  }
+                  style={styles.x}
                 >
-                  <Text color={colors.accent} style={{ textDecorationLine: 'underline' }}>
-                    {`${d.title} →`}
-                  </Text>
+                  <Icon name="trash" size={18} color={colors.muted} />
                 </Pressable>
+              ) : d.recipeId ? (
+                <View style={styles.actions}>
+                  <Button
+                    label="Recipe"
+                    variant="secondary"
+                    small
+                    accessibilityLabel={`Open recipe: ${d.title}`}
+                    onPress={() => go(`/recipes/${d.recipeId}`)}
+                  />
+                  {d.versionId ? (
+                    <Button
+                      label="Cook"
+                      icon="play"
+                      small
+                      accessibilityLabel={`Cook ${d.title}`}
+                      onPress={() => go(`/cook/${d.versionId}`)}
+                    />
+                  ) : null}
+                </View>
               ) : (
-                <Text style={{ flex: 1 }}>{d.title}</Text>
+                <Text variant="small">No recipe</Text>
               )}
-              <Pressable
-                accessibilityRole="button"
-                accessibilityLabel={`Remove ${d.title}`}
-                onPress={() =>
-                  mealId && run(() => remove.mutateAsync({ mealId, itemId: d.itemId }))
-                }
-                style={styles.x}
-              >
-                <Icon name="trash" size={18} color={colors.muted} />
-              </Pressable>
             </View>
           ))}
         </View>
       ) : null}
 
-      <RecipePicker
-        mealId={mealId}
-        course="main"
-        showListWhenEmpty={false}
-        placeholder="Add dish: search recipes or type a name"
-        onPick={(hit) => addDish({ versionId: hit.versionId })}
-        onAddWithoutRecipe={(t) => addDish({ description: t })}
-        autoFocus
-      />
+      {mode === 'add' ? (
+        <RecipePicker
+          mealId={mealId}
+          course="main"
+          showListWhenEmpty={false}
+          placeholder="Search your recipes or type a dish"
+          onPick={(hit) => addDish({ versionId: hit.versionId })}
+          onAddWithoutRecipe={(t) => addDish({ description: t })}
+          onClose={planned || dishes.length ? () => setMode('view') : undefined}
+          autoFocus={false}
+        />
+      ) : null}
       {error ? (
         <Text color={colors.danger} accessibilityRole="alert">
           {error}
         </Text>
       ) : null}
-      <View style={styles.row}>
-        {meal?.id && !meal.hosted ? (
+
+      {mode === 'view' ? (
+        <View style={styles.row}>
           <Button
-            label="Remove meal"
-            variant="danger"
-            onPress={() =>
-              run(async () => {
-                await del.mutateAsync(meal.id as Id)
-                onClose()
-              })
-            }
+            label="Add a dish"
+            icon="plus"
+            variant="soft"
+            small
+            onPress={() => setMode('add')}
           />
-        ) : null}
-      </View>
+          {dishes.length ? (
+            <Button
+              label="Edit"
+              icon="edit"
+              variant="ghost"
+              small
+              onPress={() => setMode('edit')}
+            />
+          ) : null}
+        </View>
+      ) : null}
+      {mode === 'edit' ? (
+        <View style={styles.row}>
+          <Button label="Done" small onPress={() => setMode('view')} />
+          {meal?.id && !meal.hosted ? (
+            <Button
+              label="Remove meal"
+              variant="danger"
+              small
+              onPress={() =>
+                run(async () => {
+                  await del.mutateAsync(meal.id as Id)
+                  onClose()
+                })
+              }
+            />
+          ) : null}
+        </View>
+      ) : null}
     </Sheet>
   )
 }
@@ -153,11 +216,16 @@ const styles = StyleSheet.create({
   dish: {
     flexDirection: 'row',
     alignItems: 'center',
+    flexWrap: 'wrap',
     gap: space.sm,
     backgroundColor: colors.subtle,
     borderRadius: radius.tile,
-    paddingLeft: space.md,
+    paddingVertical: space.sm,
+    paddingHorizontal: space.md,
+    minHeight: size.touch,
   },
+  dishTitle: { flex: 1, minWidth: 140, fontFamily: fonts.bodySemiBold, fontSize: fontSize.md },
+  actions: { flexDirection: 'row', gap: space.xs },
   x: { width: size.touch, height: size.touch - 8, alignItems: 'center', justifyContent: 'center' },
   row: { flexDirection: 'row', flexWrap: 'wrap', gap: space.sm, alignItems: 'center' },
 })

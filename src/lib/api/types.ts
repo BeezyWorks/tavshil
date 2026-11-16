@@ -685,6 +685,14 @@ export interface MealProblemCounts {
 }
 
 /** A meal as a tile: enough for a week cell, a run tile or a folded row. */
+export interface MealDish {
+  itemId: Id
+  title: string
+  course: string | null
+  recipeId: Id | null
+  versionId: Id | null
+}
+
 export interface MealCard {
   /** Null for a default meal of a holy day that does not exist yet (`virtual`): create it with `create`. */
   id: Id | null
@@ -714,6 +722,8 @@ export interface MealCard {
   part: 'night' | 'day' | null
   /** Dish titles of the main course (else the first course with dishes) in menu order. Empty: "Not planned". */
   summary: string[]
+  /** Every dish in menu order, with its recipe: enough to show the meal without loading its page. */
+  dishes: MealDish[]
   itemCount: number
   planned: boolean
   headcount: Headcount

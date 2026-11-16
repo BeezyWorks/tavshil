@@ -58,11 +58,11 @@ export const useHosted = (key: string) =>
   useQuery({ queryKey: ['hosted', key], queryFn: () => api.getHosted(key) })
 
 /** One meal as a hosted-page row (the wizard uses it for its guests step). */
-export const useHostedMeal = (mealId: Id | undefined) =>
+export const useHostedMeal = (mealId: Id | undefined, enabled = true) =>
   useQuery({
     queryKey: ['hostedMeal', mealId],
     queryFn: () => api.getHostedMeal(mealId!),
-    enabled: !!mealId,
+    enabled: !!mealId && enabled,
   })
 
 /**

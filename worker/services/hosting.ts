@@ -85,6 +85,14 @@ export interface HolidayView {
   kind: 'jewish' | 'civil'
 }
 
+export interface MealDish {
+  itemId: string
+  title: string
+  course: string | null
+  recipeId: string | null
+  versionId: string | null
+}
+
 export interface MealCard {
   /** Null for a default meal of a holy day that has not been created yet (`virtual`). */
   id: string | null
@@ -116,6 +124,8 @@ export interface MealCard {
   part: 'night' | 'day' | null
   /** Dish titles of the main course (or the first course with dishes) in menu order. Empty: show "Not planned". */
   summary: string[]
+  /** Every dish in menu order, with its recipe: enough to show the meal without loading its page. */
+  dishes: MealDish[]
   itemCount: number
   planned: boolean
   headcount: Headcount
@@ -335,8 +345,13 @@ function listedHouseholdIds(
   ])
 }
 
-async function loadFacts(db: Db, actor: Actor, meal: MealRow): Promise<MealFacts> {
-  return (await loadFactsMany(db, actor, [meal])).get(meal.id)!
+async function loadFacts(
+  db: Db,
+  actor: Actor,
+  meal: MealRow,
+  known?: { loc?: HouseholdLocation },
+): Promise<MealFacts> {
+  return (await loadFactsMany(db, actor, [meal], known)).get(meal.id)!
 }
 
 /**
@@ -518,6 +533,16 @@ function cardOf(
       ctx.items.map((i) => ({ ...i, course: itemCourse(i, ctx.versions) })),
       (i) => itemTitle(i, ctx.versions),
     ),
+    dishes: ctx.items.map((i) => {
+      const v = i.versionId ? ctx.versions.get(i.versionId) : undefined
+      return {
+        itemId: i.id,
+        title: itemTitle(i, ctx.versions),
+        course: itemCourse(i, ctx.versions),
+        recipeId: v?.recipe.id ?? null,
+        versionId: v?.version.id ?? null,
+      }
+    }),
     itemCount: ctx.items.length,
     planned: ctx.items.length > 0,
     headcount: counts,
@@ -558,6 +583,7 @@ function virtualCard(
     holyDate: hd.date,
     part: d.part,
     summary: [],
+    dishes: [],
     itemCount: 0,
     planned: false,
     headcount: hostHeadcount,
@@ -836,7 +862,7 @@ export async function getHosted(db: Db, actor: Actor, key: string): Promise<Host
       runsAround(meal.date, loc),
     )
     if (place.run) return getHosted(db, actor, place.run.key)
-    const view = viewOf(await loadFacts(db, actor, meal), {
+    const view = viewOf(await loadFacts(db, actor, meal, { loc }), {
       runKey: null,
       holyDate: null,
       part: null,
@@ -1038,7 +1064,7 @@ export async function getHostedMeal(db: Db, actor: Actor, mealId: string): Promi
     { date: meal.date, slot: meal.slot as DaySlot },
     runsAround(meal.date, loc),
   )
-  return viewOf(await loadFacts(db, actor, meal), {
+  return viewOf(await loadFacts(db, actor, meal, { loc }), {
     runKey: place.run?.key ?? null,
     holyDate: place.holy?.date ?? null,
     part: place.part,
