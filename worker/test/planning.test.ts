@@ -60,7 +60,7 @@ async function importAll(who: string) {
 }
 
 describe('meal planning flow', () => {
-  it('create meal, strict sesame guest hides the salad, add items, brief, accept, shopping and prep', async () => {
+  it('create meal, strict sesame guest hides the salad, add items, brief, shopping and prep', async () => {
     const who = 'planner-1'
     await api(who, 'PATCH', '/household', { location: NY })
     const r = await importAll(who)
@@ -131,9 +131,10 @@ describe('meal planning flow', () => {
       addItems: [{ versionId: r.salad.id }],
     })
     expect(bad.brief.hardExclusions.length).toBeGreaterThan(0)
-    const blocked = await api(who, 'POST', '/meals/accept', { mealIds: [mealId] })
-    expect(blocked.accepted).toHaveLength(0)
-    expect(blocked.blocked[0].problems.join(' ')).toMatch(/sesame/i)
+    // Nothing blocks the meal: it counts at once and the problem is a warning on it for the host to see.
+    expect(JSON.stringify(bad.brief.hardExclusions)).toMatch(/sesame/i)
+    const withSalad = await api(who, 'GET', '/shopping')
+    expect(withSalad.lines.some((l: any) => /tahini/i.test(l.name))).toBe(true)
     const saladItem = bad.meal.items.find((i: any) => i.title === 'Tahini salad')
     await api(who, 'PATCH', `/meals/${mealId}`, { removeItemIds: [saladItem.id] })
 
@@ -141,10 +142,6 @@ describe('meal planning flow', () => {
     const brief = await api(who, 'GET', `/meals/${mealId}/brief`)
     expect(brief.disclaimer).toMatch(/on the host/i)
     expect(brief.mealIssues.filter((i: any) => i.severity === 'error')).toHaveLength(0)
-
-    // Accept.
-    const accepted = await api(who, 'POST', '/meals/accept', { mealIds: [mealId] })
-    expect(accepted.accepted).toHaveLength(1)
 
     const shop = await api(who, 'GET', '/shopping')
     expect(shop.lines.length).toBeGreaterThan(3)
@@ -157,18 +154,21 @@ describe('meal planning flow', () => {
     expect(prep.days.length).toBeGreaterThan(0)
     expect(prep.days.flatMap((d: any) => d.tasks).length).toBeGreaterThan(0)
 
-    // Menu lookup reads the accepted plan.
+    // Menu lookup reads the plan.
     const menu = await api(who, 'GET', `/menu?date=${date}`)
     expect(menu.meals[0].items.map((i: any) => i.title)).toEqual(
       expect.arrayContaining(['Roast chicken', 'Potato kugel', 'Potato salad']),
     )
 
-    // Editing an accepted meal reopens it for review.
+    // Editing a meal does not reopen anything: it keeps counting, with no draft state to read.
     const edited = await api(who, 'PATCH', `/meals/${mealId}`, {
       removeItemIds: [withItems.meal.items[2].id],
     })
-    expect(edited.reopened).toBe(true)
-    expect(edited.meal.status).toBe('draft')
+    expect(edited.reopened).toBeUndefined()
+    expect(edited.meal.status).toBeUndefined()
+    const after = await api(who, 'GET', '/shopping')
+    expect(after.lines.find((l: any) => /chicken/i.test(l.name))).toBeTruthy()
+    expect((await api(who, 'GET', '/prep')).mealCount).toBe(1)
   })
 
   it('a guest meal at the Blochs carries the kugel we bring and flags their allergy; a hosted side is just a title', async () => {
@@ -292,9 +292,8 @@ describe('meal planning flow', () => {
       },
       201,
     )
-    const drafts = await api(who, 'GET', `/calendar?from=${date}&to=${date}`)
-    expect(drafts.days[0].cooking.taskCount).toBe(0)
-    await api(who, 'POST', '/meals/accept', { mealIds: [m.meal.id] })
+    void m
+    // A meal with dishes is on the calendar's cooking at once; there is no accepting step.
     const cal = await api(who, 'GET', `/calendar?from=${date}&to=${date}`)
     const cooking = cal.days[0].cooking
     expect(cooking.taskCount).toBeGreaterThan(0)
@@ -313,7 +312,7 @@ describe('meal planning flow', () => {
     })
     expect(edited.meal.name).toBe('Leil Shabbat')
     expect(edited.meal.timeText).toBe('19:15')
-    expect(edited.reopened).toBe(false)
+    expect(edited.reopened).toBeUndefined()
     const cleared = await api(who, 'PATCH', `/meals/${m.meal.id}`, { time: null })
     expect(cleared.meal.timeText).toBeNull()
     await api(who, 'PATCH', `/meals/${m.meal.id}`, { name: '   ' }, 400)
@@ -350,8 +349,9 @@ describe('meal planning flow', () => {
       201,
     )
     expect(m.brief.mealIssues.some((i: any) => i.severity === 'error')).toBe(true)
-    const res = await api(who, 'POST', '/meals/accept', { mealIds: [m.meal.id] })
-    expect(res.blocked).toHaveLength(1)
+    // The error is a warning on the meal, not a gate: the meal still counts for shopping.
+    const shop = await api(who, 'GET', '/shopping')
+    expect(shop.lines.some((l: any) => /cottage cheese/i.test(l.name))).toBe(true)
   })
 
   it('suggest_menu proposes without applying, then applies', async () => {
@@ -384,13 +384,15 @@ describe('meal planning flow', () => {
       { date: '2026-01-02', name: 'Old dinner', items: [{ versionId: r.kugel.id }] },
       201,
     )
-    const hold = await api(who, 'POST', '/meals/accept', { mealIds: [m.meal.id] })
-    expect(hold.accepted).toHaveLength(1)
+    // A past meal with no dishes stays open (dishes logged later still settle it).
+    const empty = await api(who, 'POST', '/meals', { date: '2026-01-03', name: 'Empty' }, 201)
     // Reading anything settles it: the household's person was served the kugel and the pantry shrank.
     const people = await api(who, 'GET', '/people')
     const me = people.household.people[0]
     const person = await api(who, 'GET', `/people/${me.id}`)
     expect(person.person.served.map((x: any) => x.title)).toContain('Potato kugel')
+    expect((await api(who, 'GET', `/meals/${m.meal.id}`)).meal.settled).toBe(true)
+    expect((await api(who, 'GET', `/meals/${empty.meal.id}`)).meal.settled).toBe(false)
     const pantry = await api(who, 'GET', '/pantry')
     const potatoes = pantry.items.find((i: any) => /potato/i.test(i.name))
     expect(potatoes.amount).toBe(4)

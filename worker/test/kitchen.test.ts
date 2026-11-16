@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest'
 import { api, nextFriday } from './helpers'
 
 describe('use soon', () => {
-  it('parses quantities, flags expired and expiring-soon items, and holds stock for accepted menus', async () => {
+  it('parses quantities, flags expired and expiring-soon items, and holds stock for planned menus without accepting', async () => {
     const who = 'pan-1'
     const kugel = await api(
       who,
@@ -64,7 +64,7 @@ describe('use soon', () => {
       { date, name: 'Dinner', items: [{ versionId: kugel.version.id }] },
       201,
     )
-    await api(who, 'POST', '/meals/accept', { mealIds: [m.meal.id] })
+    // No accepting: a meal with dishes holds what it needs at once.
     p = await api(who, 'GET', '/pantry')
     expect(by('potatoes').held.amount).toBe(6)
     expect(by('potatoes').heldFor[0]).toMatchObject({ mealId: m.meal.id, name: 'Dinner', date })
@@ -74,8 +74,8 @@ describe('use soon', () => {
     const shop = await api(who, 'GET', '/shopping')
     expect(shop.lines.find((l: any) => /potato/i.test(l.name))).toMatchObject({ covered: true })
     expect(shop.lines.find((l: any) => /egg/i.test(l.name))).toMatchObject({ covered: true })
-    // Reopening the meal releases the holds.
-    await api(who, 'POST', '/meals/reopen', { mealIds: [m.meal.id] })
+    // Taking the dish off the meal releases the holds.
+    await api(who, 'PATCH', `/meals/${m.meal.id}`, { removeItemIds: [m.meal.items[0].id] })
     p = await api(who, 'GET', '/pantry')
     expect(by('potatoes').held).toBeNull()
   })
@@ -185,7 +185,6 @@ describe('shopping list state', () => {
       { date, name: 'Lunch', items: [{ versionId: r.version.id }] },
       201,
     )
-    await api(who, 'POST', '/meals/accept', { mealIds: [m.meal.id] })
     let list = await api(who, 'GET', '/shopping')
     expect(list.lines).toHaveLength(3)
     const keys = list.lines.map((l: any) => l.key)
@@ -244,7 +243,6 @@ describe('shopping list state', () => {
       201,
     )
     expect(m.brief.sourcingNotes[0].text).toMatch(/chalav yisrael/i)
-    await api(who, 'POST', '/meals/accept', { mealIds: [m.meal.id] })
     const list = await api(who, 'GET', '/shopping')
     expect(list.lines.find((l: any) => /butter/i.test(l.name)).sourcingNotes.join(' ')).toMatch(
       /chalav yisrael/i,

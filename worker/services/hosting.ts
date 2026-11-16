@@ -70,7 +70,7 @@ import {
   settlePassedMeals,
   type MealContext,
 } from './planning'
-import { setPresent, syncHosted, reopenIfAccepted } from './mealGuests'
+import { setPresent, syncHosted } from './mealGuests'
 import { loadEffectivePeopleOnDates, requirePerson, type EffectivePerson } from './people'
 import { itemsOfMeals, mealsInRange, type MealItemRow, type MealRow } from './plans'
 import { loadAllVersions, loadVersions, searchRecipes, type SearchInput } from './recipes'
@@ -100,7 +100,6 @@ export interface MealCard {
   time: number | null
   /** `HH:MM` 24-hour, or null. */
   timeText: string | null
-  status: 'draft' | 'accepted'
   /** Meat / dairy / parve once known. */
   kind: 'meat' | 'dairy' | 'parve' | null
   /** A full page: flagged, in a run, or has a guest from another household. */
@@ -506,7 +505,6 @@ function cardOf(
     nameEdited: meal.nameEdited,
     time: meal.time,
     timeText: toTimeText(meal.time),
-    status: meal.status,
     kind: f.mealKind,
     hosted,
     guestOf: meal.guestOf,
@@ -549,7 +547,6 @@ function virtualCard(
     nameEdited: false,
     time: null,
     timeText: null,
-    status: 'draft',
     kind: null,
     hosted: true,
     guestOf: null,
@@ -1127,7 +1124,6 @@ export async function addHouseholdToMeal(
     true,
   )
   await syncHosted(db, actor, mealId)
-  await reopenIfAccepted(db, meal)
   return getHostedMeal(db, actor, mealId)
 }
 
@@ -1151,7 +1147,6 @@ export async function removeHouseholdFromMeal(
     .update(s.mealHouseholds)
     .set({ deletedAt: Date.now() })
     .where(and(eq(s.mealHouseholds.mealId, mealId), eq(s.mealHouseholds.householdId, householdId)))
-  await reopenIfAccepted(db, meal)
   return getHostedMeal(db, actor, mealId)
 }
 
@@ -1185,7 +1180,6 @@ export async function setMemberPresent(
   }
   await setPresent(db, mealId, [personId], present)
   if (present) await syncHosted(db, actor, mealId)
-  await reopenIfAccepted(db, meal)
   return getHostedMeal(db, actor, mealId)
 }
 
@@ -1241,7 +1235,6 @@ export async function addDish(db: Db, actor: Actor, mealId: string, input: AddDi
       kashrut: input.kashrut ?? null,
     })
   } else throw invalid('A dish needs a versionId, a description or someone bringing it')
-  await reopenIfAccepted(db, meal)
   return getHostedMeal(db, actor, mealId)
 }
 
@@ -1252,7 +1245,6 @@ export async function removeDish(db: Db, actor: Actor, mealId: string, itemId: s
     .update(s.mealItems)
     .set({ deletedAt: Date.now() })
     .where(and(eq(s.mealItems.id, itemId), eq(s.mealItems.mealId, mealId)))
-  await reopenIfAccepted(db, meal)
   return getHostedMeal(db, actor, mealId)
 }
 
@@ -1292,7 +1284,6 @@ export async function updateDish(
       ...(input.kashrut !== undefined && { kashrut: input.kashrut }),
     })
     .where(and(eq(s.mealItems.id, itemId), eq(s.mealItems.mealId, mealId)))
-  await reopenIfAccepted(db, meal)
   return getHostedMeal(db, actor, mealId)
 }
 
@@ -1330,7 +1321,6 @@ export async function moveDish(
       .where(eq(s.mealItems.id, it.id)),
   )
   for (let i = 0; i < stmts.length; i += 50) await db.batch(stmts.slice(i, i + 50) as never)
-  await reopenIfAccepted(db, meal)
   return getHostedMeal(db, actor, mealId)
 }
 

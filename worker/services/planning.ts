@@ -69,7 +69,7 @@ import {
 } from './plans'
 import { getPrefs } from './prefs'
 import { loadAllVersions, loadVersions } from './recipes'
-import { getPrepSchedule } from './shopping'
+import { getPrepSchedule } from './prep'
 
 const MAX_RANGE_DAYS = 400
 
@@ -90,10 +90,11 @@ export async function settlePassedMeals(
     .where(
       and(
         eq(s.meals.householdId, householdId),
-        eq(s.meals.status, 'accepted'),
         lt(s.meals.date, today),
         isNull(s.meals.settledAt),
         isNull(s.meals.deletedAt),
+        // Only meals with dishes: an empty meal stays open, so dishes logged later still settle.
+        sql`exists (select 1 from ${s.mealItems} where ${s.mealItems.mealId} = ${s.meals.id} and ${s.mealItems.deletedAt} is null)`,
       ),
     )
     .orderBy(asc(s.meals.date))
@@ -425,8 +426,6 @@ async function mealView(db: Db, actor: Actor, ctx: MealContext) {
     hosted: meal.hosted,
     guestOf: meal.guestOf,
     nameEdited: meal.nameEdited,
-    status: meal.status,
-    acceptedAt: meal.acceptedAt,
     settled: !!meal.settledAt,
     attendees: ctx.attendees.map(nameOf),
     /** Adult-portion equivalents for who is coming (kids eat less); a guide for scaling dishes. */
@@ -494,7 +493,6 @@ export async function briefOf(db: Db, actor: Actor, ctx: MealContext, candidates
   return {
     ...brief,
     people,
-    mealStatus: ctx.meal.status,
     hasAllergyConstraints: brief.activeConstraints.some(
       (a) => a.constraint.tag.type === 'allergen',
     ),
@@ -924,12 +922,6 @@ export async function updateMeal(db: Db, actor: Actor, mealId: string, input: Up
   }
   if (input.time !== undefined) patch.time = parseTime(input.time)
   if (input.kind !== undefined) patch.kind = input.kind
-  let reopened = false
-  if (content && meal.status === 'accepted') {
-    patch.status = 'draft'
-    patch.acceptedAt = null
-    reopened = true
-  }
   if (Object.keys(patch).length) await db.update(s.meals).set(patch).where(eq(s.meals.id, mealId))
 
   if (input.personIds) await setAttendees(db, actor, mealId, input.personIds)
@@ -973,8 +965,7 @@ export async function updateMeal(db: Db, actor: Actor, mealId: string, input: Up
     )
     await batch(db, stmts)
   }
-  const res = await getMeal(db, actor, mealId)
-  return { ...res, reopened }
+  return getMeal(db, actor, mealId)
 }
 
 export async function deleteMeal(db: Db, actor: Actor, mealId: string) {
@@ -984,69 +975,27 @@ export async function deleteMeal(db: Db, actor: Actor, mealId: string) {
 }
 
 // ---------------------------------------------------------------------------------------------------------------
-// Accepting (BRIEF §9)
+// Accepting is gone: every meal with dishes counts for shopping, prep, holds and history as soon as it has them.
+// The old endpoints stay for one release as no-ops so app builds that still call them keep working.
 
-export interface AcceptInput {
-  mealIds?: string[]
-  /** Accept every draft meal on this date, or in this range. */
-  date?: string
-  from?: string
-  to?: string
-  /** Accept despite problems the brief found (only when the host has said so). */
-  force?: boolean
-}
-
-export async function acceptMeals(db: Db, actor: Actor, input: AcceptInput) {
-  let meals: MealRow[]
-  if (input.mealIds?.length) {
-    meals = []
-    for (const id of input.mealIds) meals.push(await requireMeal(db, actor, id))
-  } else {
-    const from = input.from ?? input.date
-    const to = input.to ?? input.date
-    if (!from || !to) throw invalid('Give mealIds, a date, or a from/to range')
-    meals = await mealsInRange(db, actor.householdId, from, to, 'draft')
-  }
+/** @deprecated Meals no longer need accepting. Answers as before (every meal "accepted", none blocked). */
+export async function legacyAcceptMeals(db: Db, actor: Actor, input: { mealIds?: string[] }) {
   const accepted: { id: string; name: string; date: string }[] = []
-  const blocked: { id: string; name: string; date: string; problems: string[] }[] = []
-  const notes: string[] = []
-  for (const meal of meals) {
-    if (meal.status === 'accepted') continue
-    const ctx = await buildContext(db, actor, meal)
-    const brief = buildDiningBrief(ctx.input)
-    const problems = [
-      ...brief.mealIssues.filter((i) => i.severity === 'error').map((i) => i.text),
-      ...brief.hardExclusions.map((e) => e.text),
-      ...brief.ruleViolations.filter((v) => v.severity === 'strict').map((v) => v.text),
-    ]
-    if (problems.length && !input.force) {
-      blocked.push({ id: meal.id, name: meal.name, date: meal.date, problems: unique(problems) })
-      continue
-    }
-    if (!ctx.items.length) notes.push(`${meal.name} (${meal.date}) has no dishes yet.`)
-    await db
-      .update(s.meals)
-      .set({ status: 'accepted', acceptedAt: Date.now() })
-      .where(eq(s.meals.id, meal.id))
-    accepted.push({ id: meal.id, name: meal.name, date: meal.date })
+  for (const id of input.mealIds ?? []) {
+    const m = await requireMeal(db, actor, id)
+    accepted.push({ id: m.id, name: m.name, date: m.date })
   }
-  await settlePassedMeals(db, actor.householdId)
   return {
     accepted,
-    blocked,
-    notes,
-    message: blocked.length
-      ? 'Some meals were not accepted because the dining brief found problems. Show them to the host; accept with force only if the host says so.'
-      : 'Accepted. Use-soon items are held for these meals and the cooking is scheduled.',
+    blocked: [] as { id: string; name: string; date: string; problems: string[] }[],
+    notes: [] as string[],
+    message: 'Meals no longer need accepting: a meal counts as soon as it has dishes.',
   }
 }
 
-export async function reopenMeals(db: Db, actor: Actor, mealIds: string[]) {
-  for (const id of mealIds) {
-    const m = await requireMeal(db, actor, id)
-    if (m.settledAt) throw conflict(`${m.name} has already happened`)
-    await db.update(s.meals).set({ status: 'draft', acceptedAt: null }).where(eq(s.meals.id, id))
-  }
+/** @deprecated Meals no longer need accepting, so there is nothing to reopen. */
+export async function legacyReopenMeals(db: Db, actor: Actor, mealIds: string[]) {
+  for (const id of mealIds) await requireMeal(db, actor, id)
   return { reopened: mealIds }
 }
 
@@ -1203,11 +1152,6 @@ export async function suggestMenuForMeal(
       meal.id,
       menu.map((m) => ({ versionId: m.versionId, course: m.course })),
     )
-    if (meal.status === 'accepted')
-      await db
-        .update(s.meals)
-        .set({ status: 'draft', acceptedAt: null })
-        .where(eq(s.meals.id, meal.id))
   }
   return {
     applied: !!input.apply,
@@ -1230,7 +1174,7 @@ function checkRange(from: string, to: string) {
 export async function getCalendar(
   db: Db,
   actor: Actor,
-  input: { from?: string; to?: string; days?: number; includeDrafts?: boolean },
+  input: { from?: string; to?: string; days?: number },
 ) {
   await settlePassedMeals(db, actor.householdId)
   const loc = await householdLocation(db, actor.householdId)
@@ -1244,8 +1188,8 @@ export async function getCalendar(
     db,
     meals.map((m) => m.id),
   )
-  // The cooking to do on each day, from the prep schedule (accepted meals; drafts too on request).
-  const prep = await getPrepSchedule(db, actor, { from, to, includeDrafts: input.includeDrafts })
+  // The cooking to do on each day, from the prep schedule.
+  const prep = await getPrepSchedule(db, actor, { from, to })
   const mealName = new Map(meals.map((m) => [m.id, m.name]))
   const cookingOn = new Map(prep.days.map((d) => [d.date, d.tasks]))
   return {
@@ -1276,7 +1220,6 @@ export async function getCalendar(
           time: m.time,
           timeText: clock(m.time),
           kind: m.kind,
-          status: m.status,
           itemCount: (items.get(m.id) ?? []).length,
         })),
     })),
@@ -1347,7 +1290,6 @@ export async function getUpcoming(db: Db, actor: Actor, input: { days?: number }
         time: m.time,
         timeText: clock(m.time),
         kind: m.kind,
-        status: m.status,
         itemCount: (items.get(m.id) ?? []).length,
       }))
 
@@ -1382,16 +1324,15 @@ export async function getUpcoming(db: Db, actor: Actor, input: { days?: number }
       name: m.name,
       date: m.date,
       timeText: clock(m.time),
-      status: m.status,
     })),
   }
 }
 
-/** What is for dinner: the accepted menus (and, if asked, drafts) over a range, with their items. */
+/** What is for dinner: the menus over a range, with their items. */
 export async function getMenu(
   db: Db,
   actor: Actor,
-  input: { date?: string; from?: string; to?: string; includeDrafts?: boolean },
+  input: { date?: string; from?: string; to?: string },
 ) {
   await settlePassedMeals(db, actor.householdId)
   const loc = await householdLocation(db, actor.householdId)
@@ -1399,9 +1340,7 @@ export async function getMenu(
   const from = input.from ?? input.date ?? today
   const to = input.to ?? input.date ?? addDaysStr(from, 7)
   checkRange(from, to)
-  const meals = (await mealsInRange(db, actor.householdId, from, to)).filter(
-    (m) => input.includeDrafts || m.status === 'accepted',
-  )
+  const meals = await mealsInRange(db, actor.householdId, from, to)
   const plan = await planMeals(db, actor.householdId, meals)
   return {
     from,
@@ -1413,11 +1352,7 @@ export async function getMenu(
       time: m.time,
       timeText: clock(m.time),
       kind: m.kind,
-      status: m.status,
       items: (plan.items.get(m.id) ?? []).map((i) => itemView(i, plan.versions)),
     })),
-    note: input.includeDrafts
-      ? null
-      : 'Only accepted meals are shown. Pass includeDrafts to see drafts.',
   }
 }

@@ -122,6 +122,10 @@ export const ingredientMeta = z.object({
     .describe('chametz, kitniyot, gebrokts, animal_derived, egg, honey, grain…'),
   densityGPerMl: z.number().positive().optional(),
   gramsPerPiece: z.number().positive().optional(),
+  staple: z
+    .boolean()
+    .optional()
+    .describe('A pantry staple (salt, oil, flour, dried spices): the shopping list folds it away'),
 })
 
 export const sectionName = z
@@ -422,7 +426,7 @@ export const updateMealInput = z.object({
         by: z.string().optional(),
         description: z.string().optional(),
         kashrut: kashrut.optional(),
-        done: z.boolean().optional().describe('Checked off on the accepted menu'),
+        done: z.boolean().optional().describe('Checked off on the menu'),
       }),
     )
     .optional(),
