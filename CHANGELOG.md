@@ -1,3 +1,11 @@
+# [3.1.0](https://github.com/BeezyWorks/tavshil/compare/v3.0.0...v3.1.0) (2026-11-16)
+
+
+### Features
+
+* **app:** favicon shows just the pot on a transparent background ([ae4b231](https://github.com/BeezyWorks/tavshil/commit/ae4b231f7b30173cbbee7673d2cecacacf35a02f))
+* **app:** step through a meal's dishes from the recipe page ([9f34e45](https://github.com/BeezyWorks/tavshil/commit/9f34e458fd816df0994dff49f34096c1ef9ec1aa))
+
 # [3.0.0](https://github.com/BeezyWorks/tavshil/compare/v2.15.0...v3.0.0) (2026-11-16)
 
 
