@@ -113,7 +113,7 @@ export function UseSoonScreen() {
     <Screen
       title="Use soon"
       back={{ label: NAV.shopping.label, href: NAV.shopping.href }}
-      subtitle="Things to use up before they go bad, soonest first. Suggestions favor dishes that use them, and accepted menus hold what they need."
+      subtitle="Things to use up before they go bad, soonest first. Suggestions favor dishes that use them, and planned meals hold what they need."
     >
       {expired.length ? (
         <Card tone="danger">
