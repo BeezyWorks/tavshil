@@ -9,7 +9,7 @@ import { longDate } from '@/lib/dates'
 import { PICKABLE_SLOTS, SLOT_LABEL, wizardHref } from '@/lib/plan'
 import { colors, space } from '@/theme/tokens'
 
-import { Sheet } from './Sheet'
+import { Sheet } from '@/components/Sheet'
 
 /** `6:30` or `18:30` to `HH:MM`; empty or unreadable is no time. */
 function cleanTime(t: string): string | undefined {
@@ -18,18 +18,8 @@ function cleanTime(t: string): string | undefined {
   return `${m[1].padStart(2, '0')}:${m[2]}`
 }
 
-/** A day's ⋯ menu: add another meal (a kind, then the in-place editor) or host a meal (name, kind, time, wizard). */
-export function DayActions({
-  date,
-  onClose,
-  onAdded,
-}: {
-  date: ISODate
-  onClose: () => void
-  /** A new unhosted meal was made: open the in-place editor for it. */
-  onAdded: (id: Id, slot: DaySlot) => void
-}) {
-  const [mode, setMode] = useState<'menu' | 'add' | 'host'>('menu')
+/** Host a meal on a day: name, kind, time, then the wizard for guests. */
+export function DayActions({ date, onClose }: { date: ISODate; onClose: () => void }) {
   const [name, setName] = useState('')
   const [slot, setSlot] = useState<DaySlot>('dinner')
   const [time, setTime] = useState('')
@@ -37,15 +27,6 @@ export function DayActions({
   const router = useRouter()
   const create = useCreatePlanMeal()
 
-  const addAnother = async (s: DaySlot) => {
-    setError('')
-    try {
-      const m = await create.mutateAsync({ date, slot: s })
-      onAdded(m.id as Id, s)
-    } catch (e) {
-      setError((e as Error).message)
-    }
-  }
   const host = async () => {
     setError('')
     if (time.trim() && !cleanTime(time)) return setError('Time looks like 18:30.')
@@ -65,58 +46,37 @@ export function DayActions({
   }
 
   return (
-    <Sheet
-      title={mode === 'host' ? `Host a meal on ${longDate(date)}` : longDate(date)}
-      onClose={onClose}
-    >
-      {mode === 'menu' ? (
-        <View style={styles.col}>
-          <Button label="Add another meal" variant="soft" onPress={() => setMode('add')} />
-          <Button label="Host a meal…" variant="soft" onPress={() => setMode('host')} />
-        </View>
-      ) : null}
-      {mode === 'add' ? (
-        <View style={styles.col}>
-          <Text color={colors.muted}>What kind of meal?</Text>
+    <Sheet title={`Host a meal on ${longDate(date)}`} onClose={onClose}>
+      <View style={styles.col}>
+        <TextField
+          label="Name"
+          value={name}
+          onChangeText={setName}
+          placeholder="Optional, e.g. Bubby's birthday"
+          autoFocus
+        />
+        <View style={{ gap: space.xs }}>
+          <Text variant="label">Kind</Text>
           <View style={styles.pills}>
             {PICKABLE_SLOTS.map((s) => (
-              <Pill key={s} label={SLOT_LABEL[s]} onPress={() => addAnother(s)} />
+              <Pill
+                key={s}
+                label={SLOT_LABEL[s]}
+                selected={s === slot}
+                onPress={() => setSlot(s)}
+              />
             ))}
           </View>
         </View>
-      ) : null}
-      {mode === 'host' ? (
-        <View style={styles.col}>
-          <TextField
-            label="Name"
-            value={name}
-            onChangeText={setName}
-            placeholder="Optional, e.g. Bubby's birthday"
-            autoFocus
-          />
-          <View style={{ gap: space.xs }}>
-            <Text variant="label">Kind</Text>
-            <View style={styles.pills}>
-              {PICKABLE_SLOTS.map((s) => (
-                <Pill
-                  key={s}
-                  label={SLOT_LABEL[s]}
-                  selected={s === slot}
-                  onPress={() => setSlot(s)}
-                />
-              ))}
-            </View>
-          </View>
-          <TextField
-            label="Time (optional)"
-            value={time}
-            onChangeText={setTime}
-            placeholder="18:30"
-            onSubmitEditing={host}
-          />
-          <Button label="Next: guests" loading={create.isPending} onPress={host} />
-        </View>
-      ) : null}
+        <TextField
+          label="Time (optional)"
+          value={time}
+          onChangeText={setTime}
+          placeholder="18:30"
+          onSubmitEditing={host}
+        />
+        <Button label="Next: guests" loading={create.isPending} onPress={host} />
+      </View>
       {error ? (
         <Text color={colors.danger} accessibilityRole="alert">
           {error}

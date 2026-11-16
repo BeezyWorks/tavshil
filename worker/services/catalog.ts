@@ -1,3 +1,4 @@
+import { isPantryStaple } from '@tavshil/core'
 import { and, asc, eq, isNull, like, or, sql } from 'drizzle-orm'
 
 import * as s from '../db/schema'
@@ -27,6 +28,8 @@ export interface IngredientMeta {
   flags?: string[] | Record<string, boolean>
   densityGPerMl?: number
   gramsPerPiece?: number
+  /** A pantry staple (salt, oil, flour) that the shopping list folds into "probably in the pantry". */
+  staple?: boolean
   /** Who vouches for this data (default: `ai` for an AI caller, `user` for the web app). */
   source?: s.FlagSource
 }
@@ -116,6 +119,7 @@ export function metaToRow(meta: IngredientMeta, source: s.FlagSource) {
     ...(meta.flags && { flags: flagsOf(meta.flags, source) }),
     ...(meta.densityGPerMl !== undefined && { densityGPerMl: meta.densityGPerMl }),
     ...(meta.gramsPerPiece !== undefined && { gramsPerPiece: meta.gramsPerPiece }),
+    ...(meta.staple !== undefined && { staple: meta.staple }),
     sources,
   }
 }
@@ -161,6 +165,8 @@ export function ingredientView(row: IngredientRow) {
     flags: row.flags ?? {},
     densityGPerMl: row.densityGPerMl,
     gramsPerPiece: row.gramsPerPiece,
+    /** Folded into "probably in the pantry" on the shopping list: as set, else the default for its name. */
+    staple: row.staple ?? isPantryStaple(row.name),
     sources: row.sources ?? {},
     scope: row.householdId ? 'household' : 'global',
     aiFilled:
@@ -210,6 +216,7 @@ export async function updateIngredient(db: Db, actor: Actor, input: UpdateIngred
     ...(m.flags && { flags: { ...(row.flags ?? {}), ...m.flags } }),
     ...(m.densityGPerMl !== undefined && { densityGPerMl: m.densityGPerMl }),
     ...(m.gramsPerPiece !== undefined && { gramsPerPiece: m.gramsPerPiece }),
+    ...(m.staple !== undefined && { staple: m.staple }),
     sources: { ...(row.sources ?? {}), ...m.sources },
   }
   if (!row.householdId) {
@@ -224,6 +231,7 @@ export async function updateIngredient(db: Db, actor: Actor, input: UpdateIngred
         flags: row.flags,
         densityGPerMl: row.densityGPerMl,
         gramsPerPiece: row.gramsPerPiece,
+        staple: row.staple,
         sources: row.sources,
         ...patch,
       })

@@ -24,9 +24,10 @@ import {
   type ServerPeople,
   type ServerPersonView,
 } from './adapt'
-import type { AcceptResult, TavshilApi } from './client'
+import type { TavshilApi } from './client'
 import { ApiError, http } from './http'
 import type {
+  ConstraintInput,
   Course,
   HostedMeal,
   HostedPage,
@@ -36,6 +37,7 @@ import type {
   KitchenItem,
   MealDetail,
   MealRecipeSearch,
+  NewPerson,
   PlanView,
   PrepDay,
   Reaction,
@@ -136,6 +138,25 @@ const TAG_TYPE_OUT = {
   'kashrut-dish': 'kashrut_dish',
   'kashrut-sourcing': 'kashrut_sourcing',
 } as const
+
+const constraintOut = (c: ConstraintInput) => ({
+  tagType: TAG_TYPE_OUT[c.tagType],
+  tag: c.tag,
+  kind: c.kind,
+  severity: c.severity,
+  activeWhen: c.activeWhen,
+  ...(c.note?.trim() && { note: c.note.trim() }),
+})
+
+/** A new person as the server takes it: constraints in its tag names, empty lists left out. */
+const personOut = (p: NewPerson) => ({
+  name: p.name,
+  ...(p.isChild !== undefined && { isChild: p.isChild }),
+  ...(p.birthDate && { birthDate: p.birthDate }),
+  ...(p.age !== undefined && { age: p.age }),
+  ...(p.constraints?.length && { constraints: p.constraints.map(constraintOut) }),
+  ...(p.rules?.length && { rules: p.rules }),
+})
 
 export const realApi: TavshilApi = {
   // ---- Household and settings ----
@@ -251,7 +272,7 @@ export const realApi: TavshilApi = {
           }[]
         }
       })[]
-    }>('/calendar', { from, to, includeDrafts: true })
+    }>('/calendar', { from, to })
     return cal.days.map((d) =>
       adaptDay(
         d,
@@ -331,18 +352,6 @@ export const realApi: TavshilApi = {
   suggestMenu: async (id) => {
     await http.post(`/meals/${id}/suggest-menu`, { apply: true })
     return meal(id)
-  },
-
-  acceptMeals: async (mealIds): Promise<AcceptResult> => {
-    const r = await http.post<{
-      accepted: { id: string }[]
-      blocked: { id: string; name: string; problems: string[] }[]
-    }>('/meals/accept', { mealIds })
-    return { accepted: r.accepted.map((a) => a.id), blocked: r.blocked }
-  },
-
-  reopenMeals: async (mealIds) => {
-    await http.post('/meals/reopen', { mealIds })
   },
 
   // ---- Recipes ----
@@ -527,8 +536,13 @@ export const realApi: TavshilApi = {
   removeMealDish: (id, itemId) => http.delete<HostedMeal>(`/meals/${id}/dishes/${itemId}`),
   moveMealDish: (id, itemId, to) => http.post<HostedMeal>(`/meals/${id}/dishes/${itemId}/move`, to),
   searchRecipesForMeal: (id, query) => http.get<MealRecipeSearch>(`/meals/${id}/recipes`, query),
-  createContactHousehold: async (name) =>
-    adaptContact(await http.post<ServerPeople['contacts'][number]>('/contacts', { name })),
+  createContactHousehold: async (name, people = []) =>
+    adaptContact(
+      await http.post<ServerPeople['contacts'][number]>('/contacts', {
+        name,
+        ...(people.length && { people: people.map(personOut) }),
+      }),
+    ),
 
   getHousehold: async () => adaptHousehold((await people()).household),
   getContacts: async () => (await people()).contacts.map(adaptContact),
@@ -554,7 +568,8 @@ export const realApi: TavshilApi = {
     await http.post(`/people/${id}/notes`, { text })
   },
 
-  addPerson: async (input) => adaptPerson(await http.post<ServerPersonView>('/people', input)),
+  addPerson: async (input) =>
+    adaptPerson(await http.post<ServerPersonView>('/people', { ...input, ...personOut(input) })),
 
   setPersonBirth: async (personId, input) => {
     await http.patch(`/people/${personId}`, input)
@@ -565,18 +580,7 @@ export const realApi: TavshilApi = {
   },
 
   addConstraint: async (personId, c) => {
-    await http.put(`/people/${personId}/constraints`, {
-      add: [
-        {
-          tagType: TAG_TYPE_OUT[c.tagType],
-          tag: c.tag,
-          kind: c.kind,
-          severity: c.severity,
-          activeWhen: c.activeWhen,
-          ...(c.note?.trim() && { note: c.note.trim() }),
-        },
-      ],
-    })
+    await http.put(`/people/${personId}/constraints`, { add: [constraintOut(c)] })
   },
 
   removeConstraint: async (personId, constraintId) => {
@@ -596,9 +600,13 @@ export const realApi: TavshilApi = {
   },
 
   // ---- Shopping, prep, pantry ----
-  getShoppingList: async () =>
+  getShoppingList: async (mealIds) =>
     adaptShopping(
-      (await http.get<{ lines: Parameters<typeof adaptShopping>[0] }>('/shopping')).lines,
+      (
+        await http.get<{ lines: Parameters<typeof adaptShopping>[0] }>('/shopping', {
+          mealIds: mealIds?.length ? mealIds : undefined,
+        })
+      ).lines,
     ),
 
   setShoppingChecked: (key, checked) => patchShopping({ check: [{ key, checked }] }),
@@ -613,6 +621,10 @@ export const realApi: TavshilApi = {
       to: addDays(today, 60),
     })
     return adaptPrep(r.days)
+  },
+
+  setPrepDone: async (marks) => {
+    await http.post('/prep/done', { marks })
   },
 
   getPantry: async () => adaptPantry(await http.get('/pantry')),

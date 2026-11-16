@@ -1,21 +1,48 @@
 import { Platform } from 'react-native'
 
+/**
+ * UI colours, by role. Contrast is checked for text: `ink`, `muted`, `accent`, `info`, `warn` and
+ * `danger` all reach 4.5:1 on `ground`, `surface`, `subtle`, `todayTint` and `holyTint`.
+ */
 export const colors = {
-  ground: '#FBFAF7',
+  /** The page: a warm cream that white groups sit on. */
+  ground: '#F7F4ED',
+  /** Grouped lists, cards, sheets. */
   surface: '#FFFFFF',
-  subtle: '#F4F3EE',
+  /** A quieter fill on the ground or inside a surface: chips, neutral badges, sunk panels. */
+  subtle: '#F0ECE3',
   ink: '#1D201C',
-  muted: '#5C625A',
-  line: '#E4E2DA',
+  /** Secondary text (5.3:1 on ground, 5.9:1 on surface). */
+  muted: '#6B6458',
+  /** Borders on controls and outlined cards. */
+  line: '#E6E1D6',
+  /** Hairlines between rows of a grouped list and between week columns. Decorative only. */
+  separator: '#EEEBE3',
   accent: '#2E6A4E',
   accentSoft: '#E7F0EA',
+  /** The accent laid over glass or white: the active tab in the nav pill. */
+  accentTint: 'rgba(46, 106, 78, 0.13)',
   onAccent: '#FFFFFF',
+  /** Today's column and row (pair with `accent` text). */
+  todayTint: '#F1F6F2',
+  /** Shabbat and Yom Tov (pair with `info` text). */
+  holyTint: '#EFF3F9',
   danger: '#A3261B',
   dangerSoft: '#FBEAE7',
   warn: '#7A4E00',
   warnSoft: '#FBF1DC',
   info: '#1F4F86',
   infoSoft: '#E6EEF8',
+  /** Quiet translucent fills on the cream ground: the Week | Month toggle, round buttons. */
+  wash: 'rgba(0, 0, 0, 0.06)',
+  washLight: 'rgba(0, 0, 0, 0.05)',
+  /** The empty ring of a tick circle. */
+  ring: '#C9C2B4',
+  /** Translucent white for floating chrome (the web nav pill and its buttons). */
+  glass: 'rgba(255, 255, 255, 0.72)',
+  glassEdge: 'rgba(255, 255, 255, 0.85)',
+  /** Shadow colour for floating chrome and menus; strength comes from the opacity. */
+  shadow: '#3C321E',
   scrim: 'rgba(29, 32, 28, 0.5)',
   // Cooking mode (dark)
   cookBg: '#151816',
@@ -69,13 +96,25 @@ export const fonts = {
 
 export const space = { xs: 4, sm: 8, md: 12, lg: 16, xl: 24, xxl: 32, huge: 48 } as const
 
-export const radius = { card: 14, input: 12, pill: 999, tile: 12, button: 6 } as const
+export const radius = {
+  card: 14,
+  /** White grouped containers on the cream ground (week, tonight card). */
+  group: 20,
+  input: 12,
+  pill: 999,
+  tile: 12,
+  button: 6,
+  /** The brand icon in the nav. */
+  icon: 9,
+} as const
 
 export const size = {
   touch: 44,
   maxContent: 1120,
   wideBreakpoint: 900,
   navHeight: 64,
+  /** The brand icon in the web top nav. */
+  brandIcon: 34,
   tabBarHeight: 64,
   gutterPhone: 16,
   gutterWide: 32,

@@ -424,3 +424,86 @@ describe('Pesach 5787 in the diaspora (Erev Pesach Wed 21 Apr 2027, Yom Tov Thu-
     expect(thu.holidays).toEqual(['Pesach I'])
   })
 })
+
+describe('task keys and rest', () => {
+  const input = {
+    location: NEW_YORK,
+    meals: [
+      {
+        id: 'fri',
+        date: '2026-11-13',
+        slot: 'dinner' as const,
+        label: 'Friday night',
+        items: [chicken, kugel],
+      },
+      { id: 'sat', date: '2026-11-14', slot: 'lunch' as const, items: [salad] },
+    ],
+  }
+
+  it('gives every task a key from its meal, dish and step, the same on every run', () => {
+    const a = buildPrepSchedule(input)
+    const keys = a.tasks.map((t) => t.key)
+    expect(new Set(keys).size).toBe(keys.length)
+    expect(keys).toEqual(
+      expect.arrayContaining([
+        'fri:chicken:cook',
+        'fri:chicken:cook-wait',
+        'fri:chicken:pre:marinate-chicken',
+        'fri:chicken:pre-wait:marinate-chicken',
+        'fri:kugel:cook',
+        'sat:salad:cook',
+        'blech:2026-11-13',
+      ]),
+    )
+    // A later meal time moves the tasks but not their keys.
+    const b = buildPrepSchedule({
+      ...input,
+      meals: [{ ...input.meals[0], time: 20 * 60 }, input.meals[1]],
+    })
+    expect(b.tasks.map((t) => t.key).sort()).toEqual([...keys].sort())
+  })
+
+  it('keeps keys unique when a meal has the same dish twice', () => {
+    const s = buildPrepSchedule({
+      location: NEW_YORK,
+      meals: [{ id: 'm', date: '2026-11-10', items: [kugel, kugel] }],
+    })
+    const cooks = s.tasks.filter((t) => t.label === 'Cook Kugel').map((t) => t.key)
+    expect(cooks.sort()).toEqual(['m:kugel:cook', 'm:kugel:cook#2'])
+  })
+
+  it('marks the day Shabbat begins with the cut-off and the block of rest, and Shabbat itself', () => {
+    const s = buildPrepSchedule(input)
+    const fri = s.days.find((d) => d.date === '2026-11-13')!
+    const sat = s.days.find((d) => d.date === '2026-11-14')!
+    const cal = calendarDay('2026-11-13', NEW_YORK)
+    const satCal = calendarDay('2026-11-14', NEW_YORK)
+    expect(fri.candleLighting).toBe(cal.candleLighting)
+    expect(fri.rest).toEqual({
+      kind: 'shabbat',
+      label: 'Shabbat',
+      startsAt: cal.candleLighting,
+      handsOnEndsAt: cal.candleLighting! - 20,
+      endsDate: '2026-11-14',
+      endsAt: satCal.havdalah,
+    })
+    expect(fri.restDay).toBe(false)
+    expect(sat.restDay).toBe(true)
+    expect(sat.rest).toBeUndefined()
+    // No hands-on work after the cut-off.
+    for (const t of fri.tasks.filter((t) => t.kind === 'active'))
+      expect(t.end ?? t.start).toBeLessThanOrEqual(fri.rest!.handsOnEndsAt)
+  })
+
+  it('names a Yom Tov that runs into Shabbat, and adds the erev day even with nothing to cook on it', () => {
+    // Shavuot 2027 in the diaspora: Friday and Shabbat, from Thursday night.
+    const s = buildPrepSchedule({
+      location: NEW_YORK,
+      meals: [{ id: 'yt', date: '2027-06-12', slot: 'lunch', items: [] }],
+    })
+    const erev = s.days.find((d) => d.rest)!
+    expect(erev.rest!.kind).toBe('yomtov_shabbat')
+    expect(erev.rest!.label).toBe('Yom Tov and Shabbat')
+    expect(erev.rest!.endsDate).toBe('2027-06-12')
+  })
+})

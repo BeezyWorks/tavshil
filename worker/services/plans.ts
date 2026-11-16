@@ -20,7 +20,6 @@ export async function mealsInRange(
   householdId: string,
   from: string,
   to: string,
-  status?: 'draft' | 'accepted',
 ): Promise<MealRow[]> {
   return db
     .select()
@@ -31,7 +30,6 @@ export async function mealsInRange(
         gte(s.meals.date, from),
         lte(s.meals.date, to),
         isNull(s.meals.deletedAt),
-        status ? eq(s.meals.status, status) : undefined,
       ),
     )
     .orderBy(asc(s.meals.date), asc(s.meals.time), asc(s.meals.createdAt))
@@ -89,6 +87,8 @@ export async function planMeals(
       planned.push({
         mealId: m.id,
         mealDate: m.date,
+        itemId: it.id,
+        title: v.recipe.title,
         lines: v.lines.map(toCoreLine),
         scale: effectiveScale(it, v),
       })

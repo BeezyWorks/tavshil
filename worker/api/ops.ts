@@ -10,6 +10,7 @@ import * as kitchen from '../services/kitchen'
 import * as people from '../services/people'
 import * as planning from '../services/planning'
 import * as publicRecipes from '../services/publicRecipes'
+import * as prep from '../services/prep'
 import * as prefs from '../services/prefs'
 import * as recipes from '../services/recipes'
 import * as sharing from '../services/sharing'
@@ -217,6 +218,8 @@ export const operations: Operation[] = [
       spicy: z.enum(['yes', 'no']).nullable().optional(),
       contactHouseholdId: S.id.optional(),
       newContactHousehold: z.string().min(1).max(100).optional(),
+      constraints: z.array(S.constraintInput).max(50).optional(),
+      rules: z.array(z.string()).optional(),
     }),
     run: (c, i) => people.savePerson(c.db, c.actor, i),
   }),
@@ -264,9 +267,27 @@ export const operations: Operation[] = [
     tag: 'People',
     scope: 'write',
     status: 201,
-    summary: 'Create a contact household with no people yet; add its members with POST /people',
-    input: z.object({ name: z.string().min(1).max(100) }),
-    run: (c, i) => people.createContactHousehold(c.db, c.actor, i.name),
+    summary: 'Create a contact household, with its people and their constraints if given',
+    description:
+      'Everything is checked before anything is saved. Add more members later with POST /people (contactHouseholdId).',
+    input: z.object({
+      name: z.string().min(1).max(100),
+      people: z
+        .array(
+          z.object({
+            name: z.string().min(1).max(100),
+            isChild: z.boolean().optional(),
+            birthDate: S.date.nullable().optional(),
+            age: z.number().int().min(0).max(120).nullable().optional(),
+            spicy: z.enum(['yes', 'no']).nullable().optional(),
+            constraints: z.array(S.constraintInput).max(50).optional(),
+            rules: z.array(z.string()).optional(),
+          }),
+        )
+        .max(30)
+        .optional(),
+    }),
+    run: (c, i) => people.createContactHousehold(c.db, c.actor, i.name, i.people),
   }),
   op({
     id: 'deleteContact',
@@ -616,7 +637,7 @@ export const operations: Operation[] = [
     path: '/ingredients/:id',
     tag: 'Catalog',
     scope: 'write',
-    summary: 'Correct an ingredient’s category, allergens, flags, aliases or density',
+    summary: 'Correct an ingredient’s category, allergens, flags, aliases, density or staple flag',
     input: idParam.extend({
       ...S.ingredientMeta.shape,
       rename: z.string().optional(),
@@ -634,6 +655,7 @@ export const operations: Operation[] = [
           flags: i.flags,
           densityGPerMl: i.densityGPerMl,
           gramsPerPiece: i.gramsPerPiece,
+          staple: i.staple,
         },
       }),
   }),
@@ -712,7 +734,6 @@ export const operations: Operation[] = [
       from: S.date.optional(),
       to: S.date.optional(),
       days: S.int.optional(),
-      includeDrafts: S.bool.optional(),
     }),
     run: (c, i) => planning.getCalendar(c.db, c.actor, i),
   }),
@@ -902,8 +923,9 @@ export const operations: Operation[] = [
     path: '/meals/accept',
     tag: 'Planning',
     scope: 'write',
-    summary:
-      'Accept meals (ids, a date, or a range): holds use-soon items and schedules the cooking',
+    summary: 'Deprecated, does nothing: meals no longer need accepting',
+    description:
+      'Kept for one release so older app builds keep working. Every meal with dishes counts for shopping, prep and use-soon holds as soon as it has them. Answers with the given meals as accepted and none blocked.',
     input: z.object({
       mealIds: z.array(S.id).optional(),
       date: S.date.optional(),
@@ -911,7 +933,7 @@ export const operations: Operation[] = [
       to: S.date.optional(),
       force: z.boolean().optional(),
     }),
-    run: (c, i) => planning.acceptMeals(c.db, c.actor, i),
+    run: (c, i) => planning.legacyAcceptMeals(c.db, c.actor, i),
   }),
   op({
     id: 'reopenMeals',
@@ -919,9 +941,10 @@ export const operations: Operation[] = [
     path: '/meals/reopen',
     tag: 'Planning',
     scope: 'write',
-    summary: 'Turn accepted meals back into drafts',
+    summary: 'Deprecated, does nothing: meals no longer need accepting',
+    description: 'Kept for one release so older app builds keep working.',
     input: z.object({ mealIds: z.array(S.id).min(1) }),
-    run: (c, i) => planning.reopenMeals(c.db, c.actor, i.mealIds),
+    run: (c, i) => planning.legacyReopenMeals(c.db, c.actor, i.mealIds),
   }),
   op({
     id: 'getMeal',
@@ -1021,12 +1044,11 @@ export const operations: Operation[] = [
     path: '/menu',
     tag: 'Planning',
     scope: 'read',
-    summary: '"What’s for dinner?": accepted menus over a date or range',
+    summary: '"What’s for dinner?": the menus over a date or range',
     input: z.object({
       date: S.date.optional(),
       from: S.date.optional(),
       to: S.date.optional(),
-      includeDrafts: S.bool.optional(),
     }),
     run: (c, i) => planning.getMenu(c.db, c.actor, i),
   }),
@@ -1037,13 +1059,27 @@ export const operations: Operation[] = [
     tag: 'Planning',
     scope: 'read',
     summary:
-      'The prep schedule for accepted meals: a per-day task list worked back from each meal’s time',
+      'The prep schedule for every meal with dishes: a per-day task list worked back from each meal’s time, with done marks',
+    description:
+      'Each task carries a stable key, its meal (id, label, serve time), dish, recipe and version, whether its times were guessed, and whether it is done. A day on which Shabbat or Yom Tov begins carries `rest` (hands-on cooking cut-off, candle lighting, when it ends). `mealIds` (comma-separated) limits it to those meals.',
     input: z.object({
       from: S.date.optional(),
       to: S.date.optional(),
-      includeDrafts: S.bool.optional(),
+      mealIds: S.ids.optional(),
     }),
-    run: (c, i) => shopping.getPrepSchedule(c.db, c.actor, i),
+    run: (c, i) => prep.getPrepSchedule(c.db, c.actor, i),
+  }),
+  op({
+    id: 'setPrepDone',
+    method: 'post',
+    path: '/prep/done',
+    tag: 'Planning',
+    scope: 'write',
+    summary: 'Tick prep tasks off (or back on) by their key from the prep schedule',
+    input: z.object({
+      marks: z.array(z.object({ key: z.string().min(1).max(300), done: z.boolean() })).min(1),
+    }),
+    run: (c, i) => prep.setPrepDone(c.db, c.actor, i),
   }),
 
   // ---- Shopping ----
@@ -1054,8 +1090,10 @@ export const operations: Operation[] = [
     tag: 'Shopping',
     scope: 'read',
     summary:
-      'The shopping list: totals for accepted meals minus unexpired use-soon items, with order and checked state',
-    input: z.object({ from: S.date.optional(), to: S.date.optional() }),
+      'The shopping list: totals for every meal with dishes minus unexpired use-soon items, with order and checked state',
+    description:
+      'Each line lists the meals and dishes that need it with each meal’s amount, `buyBy` (the earliest date it is needed) and `staple`. `mealIds` (comma-separated) gives only those meals’ amounts, with `total` across every meal when others need it too; manual lines are left out of a filtered list.',
+    input: z.object({ from: S.date.optional(), to: S.date.optional(), mealIds: S.ids.optional() }),
     run: (c, i) => shopping.getShoppingList(c.db, c.actor, i),
   }),
   op({
@@ -1086,7 +1124,7 @@ export const operations: Operation[] = [
     tag: 'Kitchen',
     scope: 'read',
     summary:
-      'Use soon: perishables to use up, soonest first, with holds for accepted menus and the chametz cutoff',
+      'Use soon: perishables to use up, soonest first, with holds for planned menus and the chametz cutoff',
     input: none,
     run: (c) => kitchen.listPantry(c.db, c.actor),
   }),

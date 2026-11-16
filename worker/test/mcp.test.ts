@@ -12,7 +12,7 @@ const EXPECTED = [
   'delete_meal',
   'get_suggestions',
   'suggest_menu',
-  'accept_meals',
+  'mark_prep_done',
   'get_menu',
   'get_prep_schedule',
   'search_recipes',
@@ -45,6 +45,9 @@ describe('MCP', () => {
     const { tools } = (await rpc(token, 'tools/list')).data.result
     const names = tools.map((t: any) => t.name)
     for (const n of EXPECTED) expect(names, n).toContain(n)
+    // Meals count as soon as they have dishes: there is no accepting or reopening any more.
+    expect(names).not.toContain('accept_meals')
+    expect(init.data.result.instructions).not.toMatch(/accept_meals|accepted meals/)
     for (const t of tools) {
       expect(t.description.length, t.name).toBeGreaterThan(20)
       expect(t.inputSchema.type, t.name).toBe('object')

@@ -1,6 +1,5 @@
 import { useRouter, type Href } from 'expo-router'
 import React, { useState } from 'react'
-import { StyleSheet, View } from 'react-native'
 
 import {
   Button,
@@ -11,12 +10,12 @@ import {
   Screen,
   SearchField,
   Text,
-  TextField,
 } from '@/components'
 import { useContacts, useCreateContactHousehold, useHousehold } from '@/lib/api/hooks'
 import type { Constraint } from '@/lib/api/types'
-import { colors, space, type Tone } from '@/theme/tokens'
+import { colors, type Tone } from '@/theme/tokens'
 
+import { AddPeopleSheet } from './AddPeopleSheet'
 import { combinedConstraints, displayName, householdCounts, matches } from './householdText'
 
 export function constraintTone(c: Constraint): Tone {
@@ -32,52 +31,39 @@ export function PeopleScreen() {
   const contacts = useContacts()
   const create = useCreateContactHousehold()
   const [q, setQ] = useState('')
-  const [naming, setNaming] = useState(false)
-  const [name, setName] = useState('')
+  const [adding, setAdding] = useState(false)
 
   const all = household.data && contacts.data ? [household.data, ...contacts.data] : null
   const shown = all?.filter((h) => matches(h, q)) ?? []
-
-  const submit = async () => {
-    if (!name.trim()) return
-    const h = await create.mutateAsync(name.trim())
-    setName('')
-    setNaming(false)
-    router.push(`/people/household/${h.id}` as Href)
-  }
 
   return (
     <Screen
       title="People"
       subtitle="Households you cook for. Contacts are private to your household."
-      actions={naming ? null : <Button label="+ Household" small onPress={() => setNaming(true)} />}
+      actions={<Button label="New household" icon="plus" small onPress={() => setAdding(true)} />}
     >
+      {adding ? (
+        <AddPeopleSheet
+          saving={create.isPending}
+          error={create.error as Error | null}
+          onClose={() => {
+            setAdding(false)
+            create.reset()
+          }}
+          onSave={(input) =>
+            create.mutate(input, {
+              onSuccess: (h) => {
+                setAdding(false)
+                router.push(`/people/household/${h.id}` as Href)
+              },
+            })
+          }
+        />
+      ) : null}
       {!all ? (
         <Loading />
       ) : (
         <>
-          {naming ? (
-            <Card tone="subtle">
-              <TextField
-                label="Household name"
-                value={name}
-                onChangeText={setName}
-                placeholder="e.g. The Levins"
-                autoFocus
-                onSubmitEditing={submit}
-              />
-              {create.error ? <Text>{(create.error as Error).message}</Text> : null}
-              <View style={styles.row}>
-                <Button
-                  label="Create"
-                  disabled={!name.trim()}
-                  loading={create.isPending}
-                  onPress={submit}
-                />
-                <Button label="Cancel" variant="ghost" onPress={() => setNaming(false)} />
-              </View>
-            </Card>
-          ) : null}
           <SearchField value={q} onChangeText={setQ} placeholder="Search households or people" />
           <Card>
             {shown.map((h, i) => {
@@ -113,7 +99,3 @@ export function PeopleScreen() {
     </Screen>
   )
 }
-
-const styles = StyleSheet.create({
-  row: { flexDirection: 'row', gap: space.sm },
-})

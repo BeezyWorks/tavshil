@@ -34,6 +34,7 @@ import type {
   MealRecipeSearch,
   MenuItemInput,
   NewMealInput,
+  NewPerson,
   Occasion,
   PantryList,
   Person,
@@ -49,11 +50,6 @@ import type {
   SuggestionResult,
   VersionEdit,
 } from './types'
-
-export interface AcceptResult {
-  accepted: Id[]
-  blocked: { id: Id; name: string; problems: string[] }[]
-}
 
 export interface TavshilApi {
   // Household and settings
@@ -79,13 +75,11 @@ export interface TavshilApi {
   setAttendees(mealId: Id, attendees: { guestIds: Id[]; notComing: Id[] }): Promise<MealDetail>
   addMenuItem(mealId: Id, course: Course, item: MenuItemInput): Promise<MealDetail>
   removeMenuItem(mealId: Id, itemId: Id): Promise<MealDetail>
-  /** Check a dish off (or back on) the accepted menu. Does not reopen the meal. */
+  /** Check a dish off (or back on) the menu. */
   setItemDone(mealId: Id, itemId: Id, done: boolean): Promise<MealDetail>
   getSuggestions(mealId: Id, course: Course): Promise<SuggestionResult>
   /** Fills the menu with a balanced set from the top suggestions. */
   suggestMenu(mealId: Id): Promise<MealDetail>
-  acceptMeals(mealIds: Id[]): Promise<AcceptResult>
-  reopenMeals(mealIds: Id[]): Promise<void>
 
   // Plan tab: weeks, runs and hosted meals
   /** The Sunday-to-Saturday week containing `date` (default: today in the household's time zone). */
@@ -125,8 +119,8 @@ export interface TavshilApi {
     mealId: Id,
     query: { q?: string; course?: string; limit?: number },
   ): Promise<MealRecipeSearch>
-  /** A new, empty contact household ("The Roths"); add its members with `addPerson`. */
-  createContactHousehold(name: string): Promise<Household>
+  /** A new contact household ("The Roths"), with its people and their constraints, in one request. */
+  createContactHousehold(name: string, people?: NewPerson[]): Promise<Household>
 
   // Recipes
   searchRecipes(query: string, filters: RecipeFilters): Promise<RecipeSummary[]>
@@ -165,14 +159,9 @@ export interface TavshilApi {
   getPerson(personId: Id): Promise<{ person: Person; household: Household }>
   addPersonNote(personId: Id, note: string): Promise<void>
   /** In your household, in a contact household, or (with `newContactHousehold`) in a new one. */
-  addPerson(input: {
-    name: string
-    isChild?: boolean
-    birthDate?: string
-    age?: number
-    contactHouseholdId?: Id
-    newContactHousehold?: string
-  }): Promise<Person>
+  addPerson(
+    input: NewPerson & { contactHouseholdId?: Id; newContactHousehold?: string },
+  ): Promise<Person>
   /** Set a birthday (exact) or an age (estimated); null clears it. */
   setPersonBirth(personId: Id, input: { birthDate: string | null } | { age: number }): Promise<void>
   /** Whether they can eat spicy food; null goes back to not known. */
@@ -189,13 +178,19 @@ export interface TavshilApi {
   ): Promise<void>
 
   // Shopping, prep, pantry
-  getShoppingList(): Promise<ShoppingLine[]>
+  /**
+   * Every meal with dishes (the next 30 days) minus use-soon stock. With `mealIds`, only those meals' amounts
+   * (each line's `total` then gives the amount across every meal); manual lines are left out.
+   */
+  getShoppingList(mealIds?: Id[]): Promise<ShoppingLine[]>
   setShoppingChecked(lineId: Id, checked: boolean): Promise<ShoppingLine[]>
   /** The full order of the lines as shown. */
   setShoppingOrder(lineIds: Id[]): Promise<ShoppingLine[]>
   addShoppingLine(name: string): Promise<ShoppingLine[]>
   removeShoppingLine(lineId: Id): Promise<ShoppingLine[]>
   getPrepSchedule(): Promise<PrepDay[]>
+  /** Tick prep tasks off (or back on) by their id (the task's stable key). */
+  setPrepDone(marks: { key: Id; done: boolean }[]): Promise<void>
   getPantry(): Promise<PantryList>
   /** The use-soon list: `expires` is required unless the item is chametz. */
   addPantryItem(item: { name: string; quantity: string; expires?: ISODate }): Promise<void>

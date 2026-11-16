@@ -18,12 +18,13 @@ import {
 } from '@/components'
 import { useDeleteVersion, useHousehold, useRecipe, useRecordReaction } from '@/lib/api/hooks'
 
+import { MealStrip } from '@/features/plan/MealStrip'
+
 import { AddEquipment } from './AddEquipment'
 import { AddTag } from './AddTag'
 import { EditableTiles } from './EditableTiles'
 import { EditVersion } from './EditVersion'
 import { LinkSteps } from './LinkSteps'
-import { MealBar, useMealContext } from './MealBar'
 import { SharePanel, SharingSwitch } from './SharePanel'
 import type { Fit, RecipeVersion, SkipImpact } from '@/lib/api/types'
 import { useMeasure, useUnits } from '@/lib/prefs'
@@ -96,7 +97,7 @@ export function isCovered(original: string, shown: (string | undefined)[]): bool
 }
 
 export function RecipeScreen() {
-  const { id } = useLocalSearchParams<{ id: string }>()
+  const { id, meal } = useLocalSearchParams<{ id: string; meal?: string }>()
   const { data: recipe, isLoading } = useRecipe(id)
   const [versionId, setVersionId] = useState<string | null>(null)
   const [scale, setScale] = useState(1)
@@ -105,7 +106,6 @@ export function RecipeScreen() {
   >(null)
   const [units, setUnits] = useUnits()
   const router = useRouter()
-  const mealCtx = useMealContext()
   const deleteVersion = useDeleteVersion()
   const dirty = useRef(false)
   /** The Edit pen toggles the editor; closing it with unsaved changes asks first. */
@@ -159,11 +159,8 @@ export function RecipeScreen() {
 
   return (
     <Screen
-      back={
-        mealCtx?.backHref
-          ? { label: `Back to ${mealCtx.meal?.name ?? 'the meal'}`, href: mealCtx.backHref }
-          : { label: 'Recipes', href: '/recipes' }
-      }
+      top={meal ? <MealStrip /> : undefined}
+      back={meal ? undefined : { label: 'Recipes', href: '/recipes' }}
       eyebrow={[COURSE_LABEL[recipe.course], recipe.form].filter(Boolean).join(' · ')}
       title={recipe.title}
       subtitle={
@@ -179,18 +176,10 @@ export function RecipeScreen() {
             variant="secondary"
             onPress={() => setEditing('share')}
           />
-          <Button
-            label="Start cooking"
-            icon="play"
-            href={`/cook/${v.id}?${new URLSearchParams({
-              scale: String(scale),
-              ...(mealCtx?.backHref ? { meal: mealCtx.mealId, from: mealCtx.backHref } : {}),
-            })}`}
-          />
+          <Button label="Start cooking" icon="play" href={`/cook/${v.id}?scale=${scale}`} />
         </View>
       }
     >
-      {mealCtx ? <MealBar ctx={mealCtx} recipeId={recipe.id} /> : null}
       {editing === 'share' ? (
         <SharePanel
           key={`share:${recipe.id}`}
@@ -288,8 +277,6 @@ export function RecipeScreen() {
           ) : null
         }
       />
-      {/* Again at the end, so the next dish is right there once you have read this one. */}
-      {mealCtx ? <MealBar ctx={mealCtx} recipeId={recipe.id} /> : null}
     </Screen>
   )
 }

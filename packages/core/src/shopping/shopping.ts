@@ -29,10 +29,24 @@ export interface ShoppingLine {
   /** Pantry covers everything quantified. */
   covered: boolean
   mealIds: string[]
+  /** What each meal needs of it, in meal order: the dishes and the amount for that meal alone. */
+  perMeal: ShoppingMealNeed[]
+  /** YYYY-MM-DD: the earliest date it is needed (a meal, or an earlier prep step such as thawing). */
+  buyBy: string
   /** e.g. "Onions — need 3½ · you have 2". */
   display: string
   /** e.g. "Onions — buy 1½". */
   toBuyDisplay: string
+}
+
+export interface ShoppingMealNeed {
+  mealId: string
+  mealDate: string
+  /** The dishes (meal items) that use it, in the order they were planned. */
+  dishes: { itemId?: string; title?: string }[]
+  /** This meal's amount, merged like the totals. Empty when it only needs it "to taste". */
+  needed: Quantity[]
+  unquantified: boolean
 }
 
 const UNIT_ORDER: CanonicalUnit[] = ['g', 'ml', 'piece']
@@ -166,6 +180,37 @@ export function buildShoppingList(
         ? `${g.name} — buy ${fmtList(toBuyL, prefs, g)}`
         : `${g.name} — covered by pantry`
     }
+    const perMeal: ShoppingMealNeed[] = []
+    for (const mealId of [...new Set(g.needs.map((n) => n.mealId))]) {
+      const mine = g.needs.filter((n) => n.mealId === mealId)
+      const sum = new Map<CanonicalUnit, Quantity>()
+      for (const n of mine) {
+        if (n.amount === null) continue
+        const key = keyOf(n.unit)
+        add(sum, key, to(n.amount, n.unit, key)!, n.approx)
+      }
+      const dishes: ShoppingMealNeed['dishes'] = []
+      const seen = new Set<string>()
+      for (const n of mine) {
+        const k = n.itemId ?? n.title ?? ''
+        if (seen.has(k)) continue
+        seen.add(k)
+        if (n.itemId !== undefined || n.title !== undefined)
+          dishes.push({
+            ...(n.itemId !== undefined && { itemId: n.itemId }),
+            ...(n.title !== undefined && { title: n.title }),
+          })
+      }
+      perMeal.push({
+        mealId,
+        mealDate: mine[0].mealDate,
+        dishes,
+        needed: ordered(sum, false),
+        unquantified: mine.some((n) => n.amount === null),
+      })
+    }
+    const buyBy = g.needs.map((n) => n.neededBy).sort()[0]
+
     lines.push({
       ingredientId: g.ingredientId,
       name: g.name,
@@ -175,6 +220,8 @@ export function buildShoppingList(
       unquantified,
       covered,
       mealIds: [...new Set(g.needs.map((n) => n.mealId))],
+      perMeal,
+      buyBy,
       display,
       toBuyDisplay,
     })

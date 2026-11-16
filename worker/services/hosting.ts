@@ -70,7 +70,7 @@ import {
   settlePassedMeals,
   type MealContext,
 } from './planning'
-import { setPresent, syncHosted, reopenIfAccepted } from './mealGuests'
+import { setPresent, syncHosted } from './mealGuests'
 import { loadEffectivePeopleOnDates, requirePerson, type EffectivePerson } from './people'
 import { itemsOfMeals, mealsInRange, type MealItemRow, type MealRow } from './plans'
 import { loadAllVersions, loadVersions, searchRecipes, type SearchInput } from './recipes'
@@ -83,6 +83,14 @@ const MAX_PLAN_DAYS = 62
 export interface HolidayView {
   name: string
   kind: 'jewish' | 'civil'
+}
+
+export interface MealDish {
+  itemId: string
+  title: string
+  course: string | null
+  recipeId: string | null
+  versionId: string | null
 }
 
 export interface MealCard {
@@ -100,7 +108,6 @@ export interface MealCard {
   time: number | null
   /** `HH:MM` 24-hour, or null. */
   timeText: string | null
-  status: 'draft' | 'accepted'
   /** Meat / dairy / parve once known. */
   kind: 'meat' | 'dairy' | 'parve' | null
   /** A full page: flagged, in a run, or has a guest from another household. */
@@ -116,6 +123,8 @@ export interface MealCard {
   part: 'night' | 'day' | null
   /** Dish titles of the main course (or the first course with dishes) in menu order. Empty: show "Not planned". */
   summary: string[]
+  /** Every dish in menu order, with its recipe: enough to show the meal without loading its page. */
+  dishes: MealDish[]
   itemCount: number
   planned: boolean
   headcount: Headcount
@@ -335,8 +344,13 @@ function listedHouseholdIds(
   ])
 }
 
-async function loadFacts(db: Db, actor: Actor, meal: MealRow): Promise<MealFacts> {
-  return (await loadFactsMany(db, actor, [meal])).get(meal.id)!
+async function loadFacts(
+  db: Db,
+  actor: Actor,
+  meal: MealRow,
+  known?: { loc?: HouseholdLocation },
+): Promise<MealFacts> {
+  return (await loadFactsMany(db, actor, [meal], known)).get(meal.id)!
 }
 
 /**
@@ -506,7 +520,6 @@ function cardOf(
     nameEdited: meal.nameEdited,
     time: meal.time,
     timeText: toTimeText(meal.time),
-    status: meal.status,
     kind: f.mealKind,
     hosted,
     guestOf: meal.guestOf,
@@ -518,6 +531,16 @@ function cardOf(
       ctx.items.map((i) => ({ ...i, course: itemCourse(i, ctx.versions) })),
       (i) => itemTitle(i, ctx.versions),
     ),
+    dishes: ctx.items.map((i) => {
+      const v = i.versionId ? ctx.versions.get(i.versionId) : undefined
+      return {
+        itemId: i.id,
+        title: itemTitle(i, ctx.versions),
+        course: itemCourse(i, ctx.versions),
+        recipeId: v?.recipe.id ?? null,
+        versionId: v?.version.id ?? null,
+      }
+    }),
     itemCount: ctx.items.length,
     planned: ctx.items.length > 0,
     headcount: counts,
@@ -549,7 +572,6 @@ function virtualCard(
     nameEdited: false,
     time: null,
     timeText: null,
-    status: 'draft',
     kind: null,
     hosted: true,
     guestOf: null,
@@ -558,6 +580,7 @@ function virtualCard(
     holyDate: hd.date,
     part: d.part,
     summary: [],
+    dishes: [],
     itemCount: 0,
     planned: false,
     headcount: hostHeadcount,
@@ -836,7 +859,7 @@ export async function getHosted(db: Db, actor: Actor, key: string): Promise<Host
       runsAround(meal.date, loc),
     )
     if (place.run) return getHosted(db, actor, place.run.key)
-    const view = viewOf(await loadFacts(db, actor, meal), {
+    const view = viewOf(await loadFacts(db, actor, meal, { loc }), {
       runKey: null,
       holyDate: null,
       part: null,
@@ -1038,7 +1061,7 @@ export async function getHostedMeal(db: Db, actor: Actor, mealId: string): Promi
     { date: meal.date, slot: meal.slot as DaySlot },
     runsAround(meal.date, loc),
   )
-  return viewOf(await loadFacts(db, actor, meal), {
+  return viewOf(await loadFacts(db, actor, meal, { loc }), {
     runKey: place.run?.key ?? null,
     holyDate: place.holy?.date ?? null,
     part: place.part,
@@ -1127,7 +1150,6 @@ export async function addHouseholdToMeal(
     true,
   )
   await syncHosted(db, actor, mealId)
-  await reopenIfAccepted(db, meal)
   return getHostedMeal(db, actor, mealId)
 }
 
@@ -1151,7 +1173,6 @@ export async function removeHouseholdFromMeal(
     .update(s.mealHouseholds)
     .set({ deletedAt: Date.now() })
     .where(and(eq(s.mealHouseholds.mealId, mealId), eq(s.mealHouseholds.householdId, householdId)))
-  await reopenIfAccepted(db, meal)
   return getHostedMeal(db, actor, mealId)
 }
 
@@ -1185,7 +1206,6 @@ export async function setMemberPresent(
   }
   await setPresent(db, mealId, [personId], present)
   if (present) await syncHosted(db, actor, mealId)
-  await reopenIfAccepted(db, meal)
   return getHostedMeal(db, actor, mealId)
 }
 
@@ -1241,7 +1261,6 @@ export async function addDish(db: Db, actor: Actor, mealId: string, input: AddDi
       kashrut: input.kashrut ?? null,
     })
   } else throw invalid('A dish needs a versionId, a description or someone bringing it')
-  await reopenIfAccepted(db, meal)
   return getHostedMeal(db, actor, mealId)
 }
 
@@ -1252,7 +1271,6 @@ export async function removeDish(db: Db, actor: Actor, mealId: string, itemId: s
     .update(s.mealItems)
     .set({ deletedAt: Date.now() })
     .where(and(eq(s.mealItems.id, itemId), eq(s.mealItems.mealId, mealId)))
-  await reopenIfAccepted(db, meal)
   return getHostedMeal(db, actor, mealId)
 }
 
@@ -1292,7 +1310,6 @@ export async function updateDish(
       ...(input.kashrut !== undefined && { kashrut: input.kashrut }),
     })
     .where(and(eq(s.mealItems.id, itemId), eq(s.mealItems.mealId, mealId)))
-  await reopenIfAccepted(db, meal)
   return getHostedMeal(db, actor, mealId)
 }
 
@@ -1330,7 +1347,6 @@ export async function moveDish(
       .where(eq(s.mealItems.id, it.id)),
   )
   for (let i = 0; i < stmts.length; i += 50) await db.batch(stmts.slice(i, i + 50) as never)
-  await reopenIfAccepted(db, meal)
   return getHostedMeal(db, actor, mealId)
 }
 

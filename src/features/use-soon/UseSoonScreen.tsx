@@ -6,6 +6,7 @@ import { api } from '@/lib/api/client'
 import { stale, useApiMutation, usePantry } from '@/lib/api/hooks'
 import type { PantryItem } from '@/lib/api/types'
 import { diffDays, shortDate } from '@/lib/dates'
+import { NAV } from '@/lib/strings'
 import { colors, space } from '@/theme/tokens'
 
 const DATE = /^\d{4}-\d{2}-\d{2}$/
@@ -111,7 +112,8 @@ export function UseSoonScreen() {
   return (
     <Screen
       title="Use soon"
-      subtitle="Things to use up before they go bad, soonest first. Suggestions favor dishes that use them, and accepted menus hold what they need."
+      back={{ label: NAV.shopping.label, href: NAV.shopping.href }}
+      subtitle="Things to use up before they go bad, soonest first. Suggestions favor dishes that use them, and planned meals hold what they need."
     >
       {expired.length ? (
         <Card tone="danger">

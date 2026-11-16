@@ -62,7 +62,7 @@ export async function listPantry(db: Db, actor: Actor, opts: { soonDays?: number
   const info = new Map(rows.map((r) => [r.id, r]))
   const useBy = (it: (typeof items)[number]) => effectiveExpiry(it, cutoff) ?? '9999-12-31'
 
-  const upcoming = await mealsInRange(db, actor.householdId, today, '2100-01-01', 'accepted')
+  const upcoming = await mealsInRange(db, actor.householdId, today, '2100-01-01')
   const plan = await planMeals(db, actor.householdId, upcoming)
   const holds = computeHolds(items, plan.planned, cutoff)
   const mealById = new Map(upcoming.map((m) => [m.id, m]))

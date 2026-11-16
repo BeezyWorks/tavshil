@@ -53,6 +53,12 @@ export default defineConfig(async () => {
       }),
     ],
     root: new URL('.', import.meta.url).pathname,
-    test: { include: ['test/**/*.test.ts'], setupFiles: ['./test/setup.ts'] },
+    test: {
+      include: ['test/**/*.test.ts'],
+      setupFiles: ['./test/setup.ts'],
+      // End-to-end tests make many D1 calls in a row: under a second here, but CI runners and the
+      // Cloudflare build can be several times slower than the 5 s default allows.
+      testTimeout: 20_000,
+    },
   }
 })

@@ -66,6 +66,11 @@ export interface PrepInput {
 // Output
 
 export interface PrepTask {
+  /**
+   * Stable within the household: the meal, the dish and the step (`<mealId>:<dishId>:cook`,
+   * `<mealId>:<dishId>:pre:marinate-chicken`, `eruv:<date>`, `blech:<date>`). Done marks are stored against it.
+   */
+  key: string
   mealId: string
   date: DateString
   /** Minutes since midnight on `date`. */
@@ -89,6 +94,20 @@ export interface PrepFlag {
   text: string
 }
 
+/** Shabbat or Yom Tov (or Yom Tov running into Shabbat) beginning on the evening of a day. */
+export interface PrepRest {
+  kind: 'shabbat' | 'yomtov' | 'yomtov_shabbat'
+  /** "Shabbat", "Yom Tov", "Yom Tov and Shabbat". */
+  label: string
+  /** Candle lighting on this day: the rest begins. */
+  startsAt: Minutes
+  /** Hands-on cooking ends by this time (candle lighting less the before-rest buffer). */
+  handsOnEndsAt: Minutes
+  /** When it ends (havdalah, else nightfall), on `endsDate`. */
+  endsDate: DateString
+  endsAt: Minutes
+}
+
 export interface PrepDay {
   date: DateString
   weekday: string
@@ -96,6 +115,12 @@ export interface PrepDay {
   holidays: string[]
   /** "Shabbat", "Yom Tov (day 1)", "Candle lighting 4:21 PM" and so on. */
   notes: string[]
+  /** Candle lighting this day, if any (after nightfall on a second day of Yom Tov). */
+  candleLighting?: Minutes
+  /** Set on the day a Shabbat or Yom Tov begins: the cut-off line and the block of rest that follows. */
+  rest?: PrepRest
+  /** Shabbat or Yom Tov: no work is scheduled, beyond what Yom Tov allows for its own meals. */
+  restDay: boolean
   meals: { mealId: string; label: string; time: Minutes }[]
   tasks: PrepTask[]
   flags: PrepFlag[]
@@ -204,6 +229,16 @@ function buildRuns(days: CalendarDay[]): Run[] {
 
 const overlaps = (a0: number, a1: number, b0: number, b1: number) => a0 < b1 && b0 < a1
 
+/** `Marinate chicken (12h)` → `marinate-chicken-12h`: the step part of a task key. */
+function stepSlug(label: string): string {
+  return (
+    label
+      .toLowerCase()
+      .replace(/[^\p{L}\p{N}]+/gu, '-')
+      .replace(/^-+|-+$/g, '') || 'step'
+  )
+}
+
 // ---------------------------------------------------------------------------
 // The schedule
 
@@ -246,7 +281,9 @@ export function buildPrepSchedule(input: PrepInput): PrepSchedule {
   const flags: PrepFlag[] = []
   const resolvedMeals: PrepSchedule['meals'] = []
 
+  const usedKeys = new Set<string>()
   const pushTask = (t: {
+    key: string
     mealId: string
     start: number
     end?: number
@@ -258,7 +295,11 @@ export function buildPrepSchedule(input: PrepInput): PrepSchedule {
   }) => {
     const s = fromAbs(t.start)
     const e = t.end === undefined ? undefined : fromAbs(t.end)
+    let key = t.key
+    for (let n = 2; usedKeys.has(key); n++) key = `${t.key}#${n}`
+    usedKeys.add(key)
     tasks.push({
+      key,
       mealId: t.mealId,
       date: s.date,
       start: s.minutes,
@@ -406,6 +447,7 @@ export function buildPrepSchedule(input: PrepInput): PrepSchedule {
       // The cooking itself.
       if (total > 0) {
         pushTask({
+          key: `${meal.id}:${item.dishId}:cook`,
           mealId: meal.id,
           start,
           end: start + active,
@@ -420,6 +462,7 @@ export function buildPrepSchedule(input: PrepInput): PrepSchedule {
         })
         if (total > active) {
           pushTask({
+            key: `${meal.id}:${item.dishId}:cook-wait`,
             mealId: meal.id,
             start: start + active,
             end: start + total,
@@ -450,6 +493,7 @@ export function buildPrepSchedule(input: PrepInput): PrepSchedule {
           (seg) => seg.start > s + a && overlaps(s + a, start, seg.start, seg.end),
         )
         pushTask({
+          key: `${meal.id}:${item.dishId}:pre:${stepSlug(step.label)}`,
           mealId: meal.id,
           start: s,
           end: s + a,
@@ -461,6 +505,7 @@ export function buildPrepSchedule(input: PrepInput): PrepSchedule {
         })
         if (start > s + a) {
           pushTask({
+            key: `${meal.id}:${item.dishId}:pre-wait:${stepSlug(step.label)}`,
             mealId: meal.id,
             start: s + a,
             end: start,
@@ -491,6 +536,7 @@ export function buildPrepSchedule(input: PrepInput): PrepSchedule {
       text: `Make an eruv tavshilin on ${weekdayName(run.erevDate)} before Yom Tov (it allows cooking on Yom Tov for Shabbat)`,
     })
     pushTask({
+      key: `eruv:${run.erevDate}`,
       mealId: '',
       start: abs(run.erevDate, (erev.candleLighting ?? 1000) - 60),
       end: abs(run.erevDate, (erev.candleLighting ?? 1000) - 45),
@@ -516,6 +562,7 @@ export function buildPrepSchedule(input: PrepInput): PrepSchedule {
     if (!hotMeals.length) continue
     const erev = byDate.get(run.erevDate)!
     pushTask({
+      key: `blech:${run.erevDate}`,
       mealId: hotMeals[0].id,
       start: abs(run.erevDate, (erev.candleLighting ?? 1000) - 40),
       end: abs(run.erevDate, (erev.candleLighting ?? 1000) - 30),
@@ -530,11 +577,35 @@ export function buildPrepSchedule(input: PrepInput): PrepSchedule {
   )
   flags.sort((a, b) => a.date.localeCompare(b.date))
 
+  // Each run of rest that a meal falls in or next to, by the day it begins.
+  const restByErev = new Map<DateString, PrepRest>()
+  for (const run of runs) {
+    const lastDate = run.segments[run.segments.length - 1].date
+    if (!input.meals.some((m) => m.date >= run.erevDate && m.date <= lastDate)) continue
+    const kinds = new Set(run.segments.map((x) => x.kind))
+    const kind = kinds.size === 2 ? 'yomtov_shabbat' : kinds.has('shabbat') ? 'shabbat' : 'yomtov'
+    const end = fromAbs(run.end)
+    restByErev.set(run.erevDate, {
+      kind,
+      label:
+        kind === 'yomtov_shabbat'
+          ? 'Yom Tov and Shabbat'
+          : kind === 'shabbat'
+            ? 'Shabbat'
+            : 'Yom Tov',
+      startsAt: fromAbs(run.start).minutes,
+      handsOnEndsAt: fromAbs(run.start - o.beforeRestBuffer).minutes,
+      endsDate: end.date,
+      endsAt: end.minutes,
+    })
+  }
+
   // Group by day.
   const dayKeys = new Set<DateString>([
     ...tasks.map((t) => t.date),
     ...flags.map((f) => f.date),
     ...resolvedMeals.map((m) => m.date),
+    ...restByErev.keys(),
   ])
   const days: PrepDay[] = [...dayKeys].sort().map((date) => {
     const cal = byDate.get(date) ?? calendarDay(date, loc)
@@ -552,12 +623,16 @@ export function buildPrepSchedule(input: PrepInput): PrepSchedule {
           : `Candle lighting ${clock12(cal.candleLighting)}`,
       )
     if (cal.havdalah !== undefined) notes.push(`Ends ${clock12(cal.havdalah)}`)
+    const rest = restByErev.get(date)
     return {
       date,
       weekday: weekdayName(date),
       hebrew: cal.hebrew.text,
       holidays: [...cal.jewishHolidays, ...cal.civilHolidays],
       notes,
+      ...(cal.candleLighting !== undefined && { candleLighting: cal.candleLighting }),
+      ...(rest && { rest }),
+      restDay: cal.noMelacha,
       meals: input.meals
         .filter((m) => m.date === date)
         .map((m) => ({

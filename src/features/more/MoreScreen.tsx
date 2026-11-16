@@ -1,33 +1,30 @@
 import React from 'react'
 
-import { Card, ListRow, Screen } from '@/components'
+import { Card, ListRow, Screen, useLayout } from '@/components'
+import { peopleIsATab } from '@/features/nav/sections'
+import { NAV, NAV_MENU } from '@/lib/strings'
 
+/** What is not a tab: People on phones, then Kitchen, Settings, About. */
 export function MoreScreen() {
+  const { wide } = useLayout()
+  const rows = [
+    ...(peopleIsATab(wide) ? [] : [NAV_MENU.people]),
+    NAV_MENU.kitchen,
+    NAV_MENU.settings,
+    NAV_MENU.about,
+  ]
   return (
-    <Screen title="More">
+    <Screen title={NAV.more.label}>
       <Card>
-        <ListRow
-          title="Prep schedule"
-          subtitle="What to do when, for accepted meals"
-          href="/prep"
-        />
-        <ListRow title="Use soon" subtitle="What to use up before it goes bad" href="/use-soon" />
-        <ListRow
-          title="Kitchen equipment"
-          subtitle="Pots, pans and appliances, and what each is kept for"
-          href="/kitchen"
-        />
-        <ListRow
-          title="Settings"
-          subtitle="Household, units, API keys and connecting your AI"
-          href="/settings"
-        />
-        <ListRow
-          title="About and support"
-          subtitle="Contact us, the privacy policy and deleting your account"
-          href="/about"
-          last
-        />
+        {rows.map((r, i) => (
+          <ListRow
+            key={r.href}
+            title={r.label}
+            subtitle={r.subtitle}
+            href={r.href}
+            last={i === rows.length - 1}
+          />
+        ))}
       </Card>
     </Screen>
   )

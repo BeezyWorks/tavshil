@@ -1,6 +1,6 @@
 {
   "name": "tavshil",
-  "version": "2.14.0",
+  "version": "3.0.0",
   "private": true,
   "main": "expo-router/entry",
   "packageManager": "pnpm@12.3.4",
@@ -12,7 +12,8 @@
     "db:generate": "pnpm --filter @tavshil/worker db:generate",
     "db:migrate:local": "wrangler d1 migrations apply tavshil --local",
     "db:migrate:remote": "wrangler d1 migrations apply tavshil --remote",
-    "test": "pnpm -r --filter ./packages/core --filter ./worker test",
+    "test": "pnpm -r --filter ./packages/core --filter ./worker test && pnpm test:app",
+    "test:app": "pnpm --filter @tavshil/core exec vitest run --root ../.. --config vitest.app.config.mjs",
     "typecheck": "tsc --noEmit && pnpm -r --filter ./packages/core --filter ./worker typecheck",
     "format": "prettier --write .",
     "ship": "scripts/build-local.sh",

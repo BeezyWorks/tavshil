@@ -77,7 +77,7 @@ Given a set of attending Persons, a date and the host household, the server retu
 
 ## 5. Likes, dislikes and serving history
 - A **reaction** is `{ person, version, like | dislike, note, recorded_by }`. It lives on the version, not the ingredient. Usually the host records it through their AI ("George loved the kugel").
-- **Serving history**: when a menu is accepted and its date passes, each version is logged as served to each attending Person.
+- **Serving history**: when a meal with dishes has passed, each version is logged as served to each attending Person.
 - **Recommendation weighting**:
   - a **like** boosts the version for that person, but the boost fades if they were served it recently, so George doesn't get the same kugel every week;
   - a **dislike** pushes the version down for that person for good. It is not hidden.
@@ -136,7 +136,7 @@ Both belong to the household (owned by the owner, used by all members).
 - **Use soon**: not an inventory of what's in the cupboard. It tracks perishables to **use up before they go bad**: the pargiyot in the fridge, half a bag of spinach, the sour cream. Shelf-stable staples (sugar, salt, oil, rice) are not tracked.
   - Each item has a **use-by date** (required), and optionally a quantity ("some" is fine). The list is sorted soonest first.
   - Expired items are never suggested; the list shows them so they can be cleared. Items expiring soon are boosted ("use the pargiyot by Tuesday"). The AI is told both.
-  - **Accepted menus hold items aside**, so the same leftover isn't promised to two meals. The hold is recalculated live as plans and versions change. Items are used up when the meal date passes, and removed once nothing is left.
+  - **Planned menus hold items aside**, so the same leftover isn't promised to two meals. The hold is recalculated live as plans and versions change. Items are used up when the meal date passes, and removed once nothing is left.
   - Only a recorded quantity comes off the shopping list.
 - **Chametz**: chametz items need no use-by date of their own; their *effective expiry* is the pre-Pesach cutoff (default erev Pesach morning, configurable; computed by the calendar engine). Adding the pasta and flour before Pesach makes this list the "use it up before Pesach" list, and the planner prioritizes them. No tracking of selling, bedikah or rooms. A recipe's Pesach compatibility is computed from its ingredients and shown alongside any explicit Pesach version.
 
@@ -149,14 +149,14 @@ Both belong to the household (owned by the owner, used by all members).
   1. **When**: start from what's coming up or pick days on the calendar. Meals are added to any day as needed; nothing is pre-created (no automatic seudah shlishit).
   2. **Who's coming**: the household is in by default; add contacts; mark individuals as not coming. As guests are added, the constraints they bring and the meal type (meat/dairy/parve) are shown live.
   3. **Dishes**: the menu starts empty. "Add item" asks what it is (main, side, salad, soup, dessert…) and then opens a picker that shows only dishes that work for the people coming and the meal type, ranked by likes, using up what expires soon and how long since it was served, with reasons shown. Dishes that don't fit are listed as hidden, with why. Any item can be marked as brought by a guest. "Suggest a menu" fills a balanced set from the top suggestions.
-  4. **Review and accept**: adjustments still needed, hands-on time and shopping notes; accepting holds use-soon items and schedules the cooking, then offers the next meal.
+  4. **Review**: adjustments still needed, hands-on time and shopping notes, then the next meal. There is no accepting step: a meal counts (use-soon holds, shopping, prep) as soon as it has dishes.
   The same flow runs through the AI: it asks who's coming, then fills slots using the same ranking and rules.
 - **Plans span days.** Planning starts from a **calendar**: pick any range of days, from one meal to a whole Yom Tov planned a month or more ahead. The calendar shows Hebrew dates, parshiyot, Jewish holidays and the household's civil holidays (Thanksgiving). The selected range is shown day by day: each meal's menu, plus all the cooking that has to happen on each day.
-- **Accepting** works per meal, per day, per period (all of Shabbat, all of Yom Tov) or for the whole plan. Each meal is draft or accepted on its own. Accepting triggers use-soon holds and, once the date passes, serving history.
+- **No draft or accepted state.** Every meal with dishes counts for use-soon holds, shopping and prep and, once its date passes, serving history; editing it just updates them. The dining brief never blocks a meal: its problems are a visible warning on the meal ("1 allergy to check") in the plan, the meal view, prep and shopping, always with the disclaimer.
 - **Scaling**: deterministic, rounds to usable units, warns where scaling isn't linear (leavening, spices, pan size, cook time). Saving a scaled result as a new version is an explicit action.
-- **Shopping list**: one line per ingredient with the **total needed across upcoming accepted meals**, minus non-expired use-soon items with a quantity ("carrots — need 2", "sour cream — need ½ cup"). The user buys what makes sense. Lines can be checked off and **reordered by dragging**; no automatic store-section grouping. Sourcing notes (§4) appear on the relevant lines.
-- **Menu lookup**: "what's for dinner?" reads the accepted plan.
-- **Prep schedule** (basic): for an accepted menu, work backwards from each meal's time and produce a per-day task list.
+- **Shopping list**: one line per ingredient with the **total needed across upcoming meals**, minus non-expired use-soon items with a quantity ("carrots — need 2", "sour cream — need ½ cup"). The user buys what makes sense. Lines can be checked off and **reordered by dragging**; no automatic store-section grouping. Sourcing notes (§4) appear on the relevant lines. Each line says which meals and dishes need it (and how much each), the date to buy it by (earlier when a step such as thawing starts the day before) and whether it is a pantry staple (salt, oil, flour: folded into one "probably in the pantry" row; a household can mark any ingredient either way). The list can be narrowed to one or more meals.
+- **Menu lookup**: "what's for dinner?" reads the plan.
+- **Prep schedule** (basic): for every meal with dishes, work backwards from each meal's time and produce a per-day task list. Tasks can be ticked off; before Shabbat and Yom Tov the schedule shows when hands-on cooking ends and candle lighting.
   - Meals get a time. Defaults come from zmanim (Friday night meal after candle lighting) and can be overridden.
   - Each version contributes its pre-prep steps (by lead time), its active time and its total time.
   - **Active work is never scheduled during Shabbat or Yom Tov.** Passive steps (marinating, chilling) may span them, as long as they start before.
@@ -191,7 +191,7 @@ Both belong to the household (owned by the owner, used by all members).
 - **REST + OpenAPI** with per-user API keys (hashed, scoped read / read-write). A Tavshil skill that drives the REST API is an alternative to MCP.
 - **MCP** via OAuth through BeezyWorks Accounts. A session acts on the signed-in user's household.
 - **MCP tools are intent-level, not CRUD**, but must cover every feature (§1):
-  - Planning: `get_dining_brief`, `plan_meal`, `update_meal` (add/remove items, brought dishes, attendees, time), `accept_menu`, `get_menu`, `get_prep_schedule`
+  - Planning: `get_dining_brief`, `plan_meal`, `update_meal` (add/remove items, brought dishes, attendees, time), `get_menu`, `get_prep_schedule`, `mark_prep_done`
   - Recipes: `search_recipes`, `get_recipe`, `import_recipe` (forgiving: pasted text/URL content), `save_recipe`, `save_variation`, `scale_recipe`, `get_recipe_history`
   - People: `get_people` (household and contacts), `save_person` (create/edit, including ghost households), `set_constraints`, `link_contact` (merge or overwrite), `add_note`, `record_reaction`
   - Kitchen: `get_use_soon`, `update_use_soon`, `get_kitchen`, `update_equipment`
@@ -210,7 +210,7 @@ D1 is the right call. The data is modest and mostly per household, so there's no
 - Constraints: all kinds and tag types, seasons via `@beitecha/engine`, combination rules, equipment rules, sourcing notes.
 - Recipes: versions, edit history, import, dimensions, cost, nutrition, source links, FTS search. Catalog built on demand by the AI, with source labels.
 - Units and conversion.
-- Dining brief, meals, brought dishes, accept menu, reactions and serving history.
+- Dining brief, meals, brought dishes, reactions and serving history.
 - Use soon (use-by dates, holds, chametz effective expiry) and equipment designations.
 - Pesach compatibility computed from ingredients.
 - Scaling (math and rounding), shopping list, basic prep schedule.

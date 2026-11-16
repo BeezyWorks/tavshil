@@ -112,6 +112,7 @@ interface MockItem {
   course: string
   title: string
   recipeId: Id | null
+  versionId?: Id | null
   broughtBy?: string
 }
 interface MockMeal {
@@ -125,6 +126,8 @@ interface MockMeal {
   guestOf?: string
   /** Household id to the person ids present. A household with no entry for itself means everyone (the host). */
   guests: Record<Id, Id[]>
+  /** Mock-only: pretend the dining brief flags this many allergies. */
+  allergies?: number
   items: MockItem[]
 }
 
@@ -133,6 +136,11 @@ const nid = (p: string) => `${p}-${seq++}`
 const OWN = 'h-us'
 
 let households: () => Household[] = () => []
+let versionLookup: (versionId: Id) => { recipeId: Id; title: string } | undefined = () => undefined
+/** The mock hands in its recipes so dishes added by version carry their recipe. */
+export function bindVersions(read: typeof versionLookup) {
+  versionLookup = read
+}
 /** The mock hands in its households so the plan model reads the same people. */
 export function bindHouseholds(read: () => Household[]) {
   households = read
@@ -140,21 +148,79 @@ export function bindHouseholds(read: () => Household[]) {
 
 const state: MockMeal[] = [
   {
-    id: 'pm-1',
+    id: 'm-tonight',
     date: TODAY,
     slot: 'dinner',
     name: 'Dinner',
     nameEdited: false,
-    time: null,
+    time: '19:00',
     hosted: false,
     guests: {},
     items: [
-      { id: 'pi-1', course: 'main', title: 'Pasta bake', recipeId: 'r-pasta-bake' },
-      { id: 'pi-2', course: 'main', title: 'Green salad', recipeId: null },
+      {
+        id: 'pi-1',
+        course: 'main',
+        title: 'Silan chicken',
+        recipeId: 'r-silan-chicken',
+        versionId: 'v-silan',
+      },
     ],
   },
   {
-    id: 'pm-2',
+    id: 'm-wed',
+    date: addDays(TODAY, 1),
+    slot: 'dinner',
+    name: 'Dinner',
+    nameEdited: false,
+    time: '18:30',
+    hosted: false,
+    guests: {},
+    items: [
+      {
+        id: 'pi-4',
+        course: 'main',
+        title: 'Pasta bake',
+        recipeId: 'r-pasta-bake',
+        versionId: 'v-pasta-bake',
+      },
+      {
+        id: 'pi-5',
+        course: 'salad',
+        title: 'Israeli salad',
+        recipeId: 'r-israeli-salad',
+        versionId: 'v-israeli-salad',
+      },
+      { id: 'pi-6', course: 'side', title: 'Fresh pita', recipeId: null },
+    ],
+  },
+  {
+    id: 'm-thu',
+    date: '2026-11-12',
+    slot: 'dinner',
+    name: 'Thursday supper',
+    nameEdited: true,
+    time: '18:30',
+    hosted: false,
+    guests: {},
+    items: [
+      {
+        id: 'mi-thu-1',
+        course: 'main',
+        title: 'Pasta bake',
+        recipeId: 'r-pasta-bake',
+        versionId: 'v-pasta-bake',
+      },
+      {
+        id: 'mi-thu-2',
+        course: 'salad',
+        title: 'Israeli salad',
+        recipeId: 'r-israeli-salad',
+        versionId: 'v-israeli-salad',
+      },
+    ],
+  },
+  {
+    id: 'm-leil',
     date: '2026-11-13',
     slot: 'dinner',
     name: 'Leil Shabbat',
@@ -162,11 +228,36 @@ const state: MockMeal[] = [
     time: null,
     hosted: true,
     guests: {},
+    allergies: 1,
     items: [
-      { id: 'pi-3', course: 'main', title: 'Roast chicken', recipeId: null },
-      { id: 'pi-4', course: 'main', title: 'Chicken soup', recipeId: 'r-chicken-soup' },
-      { id: 'pi-5', course: 'main', title: 'Silan chicken', recipeId: 'r-silan-chicken' },
-      { id: 'pi-6', course: 'side', title: 'Potato kugel', recipeId: 'r-potato-kugel' },
+      {
+        id: 'pi-3',
+        course: 'main',
+        title: 'Silan chicken',
+        recipeId: 'r-silan-chicken',
+        versionId: 'v-silan',
+      },
+      {
+        id: 'pi-8',
+        course: 'challah',
+        title: 'Challah',
+        recipeId: 'r-challah',
+        versionId: 'v-challah',
+      },
+      {
+        id: 'pi-9',
+        course: 'soup',
+        title: 'Chicken soup',
+        recipeId: 'r-chicken-soup',
+        versionId: 'v-soup',
+      },
+      {
+        id: 'pi-7',
+        course: 'side',
+        title: 'Potato kugel',
+        recipeId: 'r-potato-kugel',
+        versionId: 'v-potato-kugel',
+      },
     ],
   },
 ]
@@ -275,7 +366,6 @@ function card(m: MockMeal): MealCard {
     nameEdited: m.nameEdited,
     time: m.time ? +m.time.slice(0, 2) * 60 + +m.time.slice(3) : null,
     timeText: m.time,
-    status: 'draft',
     kind: null,
     hosted: m.hosted || !!holy || guests.length > 0,
     guestOf: m.guestOf ?? null,
@@ -284,6 +374,13 @@ function card(m: MockMeal): MealCard {
     holyDate: holy?.day.date ?? null,
     part: holy?.part ?? null,
     summary: lead.map((i) => i.title),
+    dishes: m.items.map((i) => ({
+      itemId: i.id,
+      title: i.title,
+      course: i.course,
+      recipeId: i.recipeId,
+      versionId: i.versionId ?? null,
+    })),
     itemCount: m.items.length,
     planned: m.items.length > 0,
     headcount: { adults, children, total: adults + children },
@@ -291,7 +388,9 @@ function card(m: MockMeal): MealCard {
     awayText: away.length ? `${away.join(' and ')} away` : '',
     guestHouseholds: guests.length,
     hasGuests: guests.length > 0,
-    problems: NO_PROBLEMS,
+    problems: m.allergies
+      ? { allergies: m.allergies, gaps: 0, other: 0, total: m.allergies }
+      : NO_PROBLEMS,
   }
 }
 
@@ -324,7 +423,6 @@ function virtualCard(run: Run, d: Run['days'][number], part: 'night' | 'day'): M
     nameEdited: false,
     time: null,
     timeText: null,
-    status: 'draft',
     kind: null,
     hosted: true,
     guestOf: null,
@@ -333,6 +431,7 @@ function virtualCard(run: Run, d: Run['days'][number], part: 'night' | 'day'): M
     holyDate: d.date,
     part,
     summary: [],
+    dishes: [],
     itemCount: 0,
     planned: false,
     headcount: { adults, children, total: adults + children },
@@ -622,11 +721,13 @@ export const mockPlan = {
   },
   addMealDish: (id: Id, dish: AddDishInput) => {
     const m = find(id)
+    const found = dish.versionId ? versionLookup(dish.versionId) : undefined
     m.items.push({
       id: nid('pi'),
       course: dish.course,
-      title: dish.description ?? (dish.broughtBy ? `A ${dish.course}` : 'Recipe'),
-      recipeId: dish.versionId ?? null,
+      title: dish.description ?? found?.title ?? (dish.broughtBy ? `A ${dish.course}` : 'Recipe'),
+      recipeId: found?.recipeId ?? null,
+      versionId: found ? dish.versionId : null,
       broughtBy: dish.broughtBy,
     })
     return hostedMeal(m)

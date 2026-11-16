@@ -38,6 +38,11 @@ export function weekdayName(iso: ISODate, short = false): string {
   const n = DAYS[weekday(iso)]
   return short && n !== 'שבת' ? n.slice(0, 3) : n
 }
+/** Weekday in English even for Saturday, which `weekdayName` gives as the Hebrew word: "Sat" / "Saturday". */
+export function weekdayEnglish(iso: ISODate, short = false): string {
+  const n = weekday(iso) === 6 ? 'Saturday' : DAYS[weekday(iso)]
+  return short ? n.slice(0, 3) : n
+}
 export function monthName(m: number): string {
   return MONTHS[m]
 }
@@ -115,6 +120,31 @@ export function clock12(hhmm: string | null | undefined): string {
   const [h, m] = hhmm.split(':').map(Number)
   if (Number.isNaN(h) || Number.isNaN(m)) return hhmm
   return `${((h + 11) % 12) + 1}:${String(m).padStart(2, '0')} ${h < 12 ? 'AM' : 'PM'}`
+}
+
+/** "4:28 PM" (or "16:28") to minutes past midnight; null for anything else. */
+export function clockMinutes(text: string | null | undefined): number | null {
+  const m = /^(\d{1,2}):(\d{2})\s*(AM|PM)?$/i.exec((text ?? '').trim())
+  if (!m) return null
+  const h = Number(m[1]) % (m[3] ? 12 : 24)
+  return (m[3]?.toUpperCase() === 'PM' ? h + 12 : h) * 60 + Number(m[2])
+}
+
+/** Minutes past midnight right now in `timeZone` (the household's zone, never the viewer's). */
+export function minutesNowIn(timeZone: string, now: Date = new Date()): number | null {
+  try {
+    const parts = new Intl.DateTimeFormat('en-US', {
+      timeZone,
+      hour: 'numeric',
+      minute: 'numeric',
+      hourCycle: 'h23',
+    }).formatToParts(now)
+    const h = Number(parts.find((p) => p.type === 'hour')?.value)
+    const m = Number(parts.find((p) => p.type === 'minute')?.value)
+    return Number.isNaN(h) || Number.isNaN(m) ? null : (h % 24) * 60 + m
+  } catch {
+    return null
+  }
 }
 
 const ORDINAL = /^(\d+)(?:st|nd|rd|th) of (.+?)(?:, \d+)?$/
