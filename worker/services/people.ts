@@ -454,6 +454,19 @@ export interface SavePersonInput {
   newContactHousehold?: string
   /** Rename the contact household this person is in. */
   renameHousehold?: string
+  /** For a new person: constraints to add straight away (the host's layer on a contact). */
+  constraints?: ConstraintInput[]
+  /** For a new person: opt-in rules (no_fish_dairy, ...). */
+  rules?: string[]
+}
+
+/** Throw before anything is written if a new person's constraints or rules would be refused later. */
+function checkConstraintsAndRules(input: { constraints?: ConstraintInput[]; rules?: string[] }) {
+  for (const c of input.constraints ?? []) {
+    validateConstraintTag(c.tagType, c.tag)
+    parseActiveWhen(c.activeWhen)
+  }
+  for (const r of input.rules ?? []) if (!isKnownRule(r)) throw invalid(`Unknown rule "${r}"`)
 }
 
 const isDate = (d: string) => /^\d{4}-\d{2}-\d{2}$/.test(d) && !Number.isNaN(Date.parse(d))
@@ -496,6 +509,7 @@ export async function savePerson(db: Db, actor: Actor, input: SavePersonInput) {
     return (await getPerson(db, actor, input.id)).person
   }
   if (!input.name) throw invalid('A new person needs a name')
+  checkConstraintsAndRules(input)
   let householdId = actor.householdId
   if (input.newContactHousehold) {
     const [g] = await db
@@ -528,6 +542,12 @@ export async function savePerson(db: Db, actor: Actor, input: SavePersonInput) {
       ...(input.spicy && { spicy: input.spicy }),
     })
     .returning({ id: s.persons.id })
+  if (input.constraints?.length || input.rules?.length)
+    return setConstraints(db, actor, {
+      personId: p.id,
+      add: input.constraints,
+      ...(input.rules?.length && { rules: input.rules }),
+    })
   return (await getPerson(db, actor, p.id)).person
 }
 
@@ -539,8 +559,27 @@ export async function deletePerson(db: Db, actor: Actor, personId: string) {
   return { deleted: true }
 }
 
-/** A new contact household with no people yet ("the Roths"): add its members with savePerson. */
-export async function createContactHousehold(db: Db, actor: Actor, name: string) {
+export type NewMember = Omit<
+  SavePersonInput,
+  'id' | 'contactHouseholdId' | 'newContactHousehold' | 'renameHousehold'
+> & { name: string }
+
+/**
+ * A new contact household ("the Roths"), with its members and their constraints when given, so the whole
+ * household lands in one call. Everything is checked before anything is written.
+ */
+export async function createContactHousehold(
+  db: Db,
+  actor: Actor,
+  name: string,
+  members: NewMember[] = [],
+) {
+  if (!name.trim()) throw invalid('A household needs a name')
+  for (const m of members) {
+    if (!m.name?.trim()) throw invalid('Every person needs a name')
+    await birthPatch(db, actor, m)
+    checkConstraintsAndRules(m)
+  }
   const [g] = await db
     .insert(s.households)
     .values({
@@ -550,7 +589,12 @@ export async function createContactHousehold(db: Db, actor: Actor, name: string)
       ghostOfHouseholdId: actor.householdId,
     })
     .returning({ id: s.households.id, name: s.households.name })
-  return { id: g.id, name: g.name, people: [] as unknown[] }
+  const people = []
+  for (const m of members)
+    people.push(
+      await savePerson(db, actor, { ...m, name: m.name.trim(), contactHouseholdId: g.id }),
+    )
+  return { id: g.id, name: g.name, people }
 }
 
 export async function deleteContactHousehold(db: Db, actor: Actor, householdId: string) {

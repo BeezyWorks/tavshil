@@ -23,7 +23,7 @@ import { colors, fonts, radius, space } from '@/theme/tokens'
 import { buyLine, cookedLately, dayLabel, lastMade, mealShopping, slotName } from './model'
 import { DayActions } from './DayActions'
 import { recipeHref, usePlanCtx, type Selection } from './PlanContext'
-import { Sheet } from './Sheet'
+import { Sheet } from '@/components/Sheet'
 import { ProblemLine } from './Slots'
 
 /** `Tomorrow · 7:00 pm · Us · 4`: where the meal sits and who eats. */

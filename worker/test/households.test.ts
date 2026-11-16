@@ -131,3 +131,70 @@ describe('households', () => {
     expect(bRecipe.version.id).toBeTruthy()
   })
 })
+
+describe('adding a contact household in one call', () => {
+  it('creates the household, its people and their constraints together', async () => {
+    const h = await api(
+      'hh-batch',
+      'POST',
+      '/contacts',
+      {
+        name: 'The Levins',
+        people: [
+          {
+            name: 'Dana Levin',
+            constraints: [{ tagType: 'diet', tag: 'vegetarian', severity: 'flexible' }],
+            rules: ['no_fish_meat'],
+          },
+          {
+            name: 'Noa',
+            isChild: true,
+            age: 6,
+            constraints: [{ tagType: 'allergen', tag: 'sesame' }],
+          },
+        ],
+      },
+      201,
+    )
+    expect(h.name).toBe('The Levins')
+    expect(h.people.map((p: any) => p.name)).toEqual(['Dana Levin', 'Noa'])
+    const noa = h.people[1]
+    expect(noa.isChild).toBe(true)
+    expect(noa.constraints).toMatchObject([
+      { tagType: 'allergen', tag: 'sesame', severity: 'strict', kind: 'medical', source: 'host' },
+    ])
+    expect(h.people[0].rules).toMatchObject([{ rule: 'no_fish_meat' }])
+
+    const all = await api('hh-batch', 'GET', '/people')
+    expect(all.contacts.find((c: any) => c.id === h.id).people).toHaveLength(2)
+  })
+
+  it('writes nothing when one person is invalid', async () => {
+    const before = (await api('hh-batch2', 'GET', '/people')).contacts.length
+    await api(
+      'hh-batch2',
+      'POST',
+      '/contacts',
+      {
+        name: 'The Cohens',
+        people: [
+          { name: 'Avi' },
+          { name: 'Tali', constraints: [{ tagType: 'diet', tag: 'carnivore' }] },
+        ],
+      },
+      400,
+    )
+    expect((await api('hh-batch2', 'GET', '/people')).contacts).toHaveLength(before)
+  })
+
+  it('saves a new person with constraints in one call', async () => {
+    const p = await api(
+      'hh-batch3',
+      'POST',
+      '/people',
+      { name: 'Guest', constraints: [{ tagType: 'allergen', tag: 'peanut' }] },
+      201,
+    )
+    expect(p.constraints).toHaveLength(1)
+  })
+})

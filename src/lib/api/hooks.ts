@@ -13,10 +13,12 @@ import type {
   UpdateDishInput,
   HostedMeal,
   HostedPage,
+  Household,
   Id,
   ISODate,
   MealPatch,
   NewMealInput,
+  NewPerson,
   PickableHousehold,
   PrepDay,
   Recipe,
@@ -442,8 +444,45 @@ export const useMoveMealDish = () =>
     api.moveMealDish(a.mealId, a.itemId, { course: a.course, beforeItemId: a.beforeItemId }),
   )
 /** A new empty contact household, for the last row of the household search. */
-export const useCreateContactHousehold = () =>
-  useApiMutation((name: string) => api.createContactHousehold(name), stale.people)
+const byName = (a: Household, b: Household) => a.name.localeCompare(b.name)
+
+/**
+ * A new contact household, with its people when given, in one request. It goes into the People list as soon as
+ * the server answers; everything that depends on people refreshes behind it rather than holding the screen.
+ */
+export function useCreateContactHousehold() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (a: string | { name: string; people?: NewPerson[] }) =>
+      typeof a === 'string'
+        ? api.createContactHousehold(a)
+        : api.createContactHousehold(a.name, a.people),
+    onSuccess: (h) => {
+      qc.setQueryData<Household[]>(['contacts'], (old) => old && [...old, h].sort(byName))
+      void invalidate(qc, stale.people)
+    },
+  })
+}
+
+/** Several people added to one household at once (each with their constraints), shown as soon as they land. */
+export function useAddPeople(household: { id: Id; isOwn: boolean }) {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (people: NewPerson[]) =>
+      Promise.all(
+        people.map((p) =>
+          api.addPerson({ ...p, ...(household.isOwn ? {} : { contactHouseholdId: household.id }) }),
+        ),
+      ),
+    onSuccess: (added) => {
+      const add = (h: Household): Household =>
+        h.id === household.id ? { ...h, people: [...h.people, ...added] } : h
+      if (household.isOwn) qc.setQueryData<Household>(['household'], (old) => old && add(old))
+      else qc.setQueryData<Household[]>(['contacts'], (old) => old?.map(add))
+      void invalidate(qc, stale.people)
+    },
+  })
+}
 
 /**
  * A version edit as the recipe page will show it once saved. Ingredients and steps are left for the server

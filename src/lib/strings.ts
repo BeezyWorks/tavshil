@@ -142,3 +142,65 @@ export const REMINDERS = {
   denied:
     'Notifications are off for Tavshil. Turn them on in your phone’s Settings to get reminders.',
 } as const
+
+export interface QuickConstraint {
+  key: string
+  label: string
+  tagType: 'allergen' | 'diet' | 'kashrut-sourcing'
+  tag: string
+  kind: 'medical' | 'religious' | 'preference'
+  severity: 'strict' | 'flexible'
+}
+
+/**
+ * One-tap picks for "can't eat" when adding people. Allergies are strict (the dish can't be at the meal); diets
+ * are flexible (they eat around it); sourcing standards are strict. Anything finer is set on the person page.
+ */
+export const QUICK_CONSTRAINTS: QuickConstraint[] = [
+  ...(
+    [
+      ['peanut', 'Peanuts'],
+      ['tree nuts', 'Tree nuts'],
+      ['sesame', 'Sesame'],
+      ['egg', 'Eggs'],
+      ['dairy', 'Dairy'],
+      ['gluten', 'Gluten'],
+      ['fish', 'Fish'],
+      ['soy', 'Soy'],
+    ] as const
+  ).map(([tag, label]) => ({
+    key: `allergen:${tag}`,
+    label,
+    tagType: 'allergen' as const,
+    tag,
+    kind: 'medical' as const,
+    severity: 'strict' as const,
+  })),
+  ...(
+    [
+      ['vegetarian', 'Vegetarian'],
+      ['vegan', 'Vegan'],
+    ] as const
+  ).map(([tag, label]) => ({
+    key: `diet:${tag}`,
+    label,
+    tagType: 'diet' as const,
+    tag,
+    kind: 'preference' as const,
+    severity: 'flexible' as const,
+  })),
+  ...(
+    [
+      ['chalav_yisrael', 'Chalav Yisrael'],
+      ['pat_yisrael', 'Pat Yisrael'],
+      ['glatt', 'Glatt only'],
+    ] as const
+  ).map(([tag, label]) => ({
+    key: `sourcing:${tag}`,
+    label,
+    tagType: 'kashrut-sourcing' as const,
+    tag,
+    kind: 'religious' as const,
+    severity: 'strict' as const,
+  })),
+]

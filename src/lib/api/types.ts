@@ -711,6 +711,16 @@ export interface ConstraintInput {
   note?: string
 }
 
+/** A person to create, with what they can't eat, saved in the same request. */
+export interface NewPerson {
+  name: string
+  isChild?: boolean
+  birthDate?: string
+  age?: number
+  constraints?: ConstraintInput[]
+  rules?: string[]
+}
+
 export const PERSON_RULES: { id: string; label: string }[] = [
   { id: 'no_fish_dairy', label: 'No fish with dairy' },
   { id: 'no_fish_meat', label: 'No fish with meat' },

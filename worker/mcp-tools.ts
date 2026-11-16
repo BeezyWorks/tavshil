@@ -497,7 +497,7 @@ export const TOOLS: Tool[] = [
     name: 'save_person',
     title: 'Save a person',
     description:
-      "Create or edit a person: in the household, or in a contact household (contactHouseholdId), or start a new contact household with newContactHousehold (\"the Levi family\"). Kids are plain persons (isChild). For a kid, give birthDate (YYYY-MM-DD) so they age automatically, or just age if the birthday isn’t known (stored as an estimate, to replace with the real birthday later). Age scales portions down and raises kid-friendly dishes in suggestions. spicy: 'yes' or 'no' for whether they can eat spicy food (null clears it); ask, never assume it from age. A spicy dish is flagged for anyone marked 'no'. Pass personId to rename; remove: true deletes a person. Everyone in the host’s circle is a contact, visible only to the host’s household.",
+      "Create or edit a person: in the household, or in a contact household (contactHouseholdId), or start a new contact household with newContactHousehold (\"the Levi family\"). Kids are plain persons (isChild). For a kid, give birthDate (YYYY-MM-DD) so they age automatically, or just age if the birthday isn’t known (stored as an estimate, to replace with the real birthday later). Age scales portions down and raises kid-friendly dishes in suggestions. spicy: 'yes' or 'no' for whether they can eat spicy food (null clears it); ask, never assume it from age. A spicy dish is flagged for anyone marked 'no'. A new person can carry constraints and rules in the same call (read allergies back and confirm first); to change an existing person's, use set_constraints. Pass personId to rename; remove: true deletes a person. Everyone in the host’s circle is a contact, visible only to the host’s household.",
     input: z.object({
       personId: S.id.optional(),
       name: z.string().min(1).max(100).optional(),
@@ -512,6 +512,14 @@ export const TOOLS: Tool[] = [
       contactHouseholdId: S.id.optional(),
       newContactHousehold: z.string().min(1).max(100).optional(),
       renameHousehold: z.string().optional(),
+      constraints: z
+        .array(S.constraintInput)
+        .max(50)
+        .optional()
+        .describe(
+          'For a new person: constraints to save with them (same shape as set_constraints)',
+        ),
+      rules: z.array(z.string()).optional().describe('For a new person: opt-in rules'),
       remove: z.boolean().optional(),
       removeContactHouseholdId: S.id.optional(),
     }),
@@ -533,6 +541,7 @@ export const TOOLS: Tool[] = [
         contactHouseholdId: a.contactHouseholdId,
         newContactHousehold: a.newContactHousehold,
         renameHousehold: a.renameHousehold,
+        ...(!a.personId && { constraints: a.constraints, rules: a.rules }),
       })
       return ok('Person saved.', p)
     },

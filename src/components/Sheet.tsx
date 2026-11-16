@@ -1,13 +1,15 @@
 import React from 'react'
 import { Modal, Pressable, ScrollView, StyleSheet, View } from 'react-native'
 
-import { Text, useLayout } from '@/components'
+import { Text } from './Text'
+import { useLayout } from './useLayout'
 import { PLAN } from '@/lib/strings'
 import { colors, fonts, radius, space } from '@/theme/tokens'
 
 /**
  * A panel over a dimmed page: a bottom sheet on phones (slides up, grabber, half to most of the height), a centred
- * dialog when wide. The dimmed area is its own Pressable beside the panel, so no button sits inside another.
+ * dialog when wide. The dimmed area is its own Pressable beside the panel, so no button sits inside another. A
+ * `footer` (the save button) stays in view below the scrolling body.
  */
 export function Sheet({
   title,
@@ -15,6 +17,7 @@ export function Sheet({
   onClose,
   action,
   children,
+  footer,
 }: {
   title: string
   subtitle?: string
@@ -22,6 +25,7 @@ export function Sheet({
   /** Replaces the close button (e.g. a "Done" link). */
   action?: React.ReactNode
   children: React.ReactNode
+  footer?: React.ReactNode
 }) {
   const { phone } = useLayout()
   return (
@@ -59,9 +63,14 @@ export function Sheet({
               </Pressable>
             )}
           </View>
-          <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={styles.body}>
+          <ScrollView
+            keyboardShouldPersistTaps="handled"
+            style={styles.scroll}
+            contentContainerStyle={styles.body}
+          >
             {children}
           </ScrollView>
+          {footer ? <View style={styles.footer}>{footer}</View> : null}
         </View>
       </View>
     </Modal>
@@ -119,5 +128,15 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  // The body shrinks to the panel's max height so it scrolls and the footer stays in view.
+  scroll: { flexShrink: 1 },
   body: { gap: space.md, paddingHorizontal: space.lg, paddingBottom: 28 },
+  footer: {
+    borderTopWidth: 1,
+    borderTopColor: colors.line,
+    paddingTop: space.md,
+    paddingHorizontal: space.lg,
+    paddingBottom: space.lg,
+    gap: space.sm,
+  },
 })
