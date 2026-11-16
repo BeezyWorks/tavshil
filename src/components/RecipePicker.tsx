@@ -184,6 +184,8 @@ const styles = StyleSheet.create({
     fontFamily: fonts.body,
     fontSize: fontSize.md,
     color: colors.ink,
+    // The box around it is the field; the browser's own focus ring would draw a second one inside.
+    outlineStyle: 'none' as never,
   },
   list: {
     borderWidth: 1,

@@ -66,6 +66,33 @@ export const NAV_MENU = {
 
 export const NEXT_PREP = 'Next prep'
 
+/** The Plan page and the dinner flow. */
+export const PLAN = {
+  thisWeek: 'This week',
+  tonight: 'Tonight',
+  cook: 'Cook',
+  addDinner: 'Add dinner',
+  addDinnerHint: 'Nothing planned for tonight yet',
+  addMeal: '+ Meal',
+  add: 'Add',
+  prepNext: 'Prep next',
+  all: 'All',
+  toBuy: 'To buy',
+  list: 'List',
+  change: 'Change',
+  changeDinner: 'Change dinner',
+  done: 'Done',
+  close: 'Close',
+  addDish: 'Add a dish',
+  addDishPlaceholder: 'Search your recipes or type a dish',
+  removeDinner: 'Remove this dinner',
+  cookedLately: 'Cooked lately',
+  somethingElse: 'Something else',
+  prep: 'Prep',
+  noRecipe: 'No recipe',
+  hostAMeal: 'Host a meal…',
+} as const
+
 export const USE_SOON_LINK = {
   label: 'Use soon',
   subtitle: 'What to use up before it goes bad',
