@@ -20,7 +20,6 @@ import { remainingSec, timerId, timerStatus } from '@tavshil/core/src/cook'
 import { Checkbox, Segmented, Text, useLayout } from '@/components'
 import { Icon } from '@/components/Icon'
 import { useSaveVersion, useVersion } from '@/lib/api/hooks'
-import { recipeInMealHref, safeFrom } from '@/lib/plan'
 import { useKeepAwakePref, useMeasure, useUnits } from '@/lib/prefs'
 import { formatAmount, formatClock, portionLabel } from '@/lib/units'
 import { colors, fontSize, fonts, radius, size, space } from '@/theme/tokens'
@@ -87,15 +86,10 @@ export function CookScreen() {
     versionId,
     scale: scaleParam,
     step: stepParam,
-    meal: mealParam,
-    from: fromParam,
   } = useLocalSearchParams<{
     versionId: string
     scale?: string
     step?: string
-    /** The meal the recipe was opened from: kept so leaving returns to the recipe with its meal bar. */
-    meal?: string
-    from?: string
   }>()
   const router = useRouter()
   const { data } = useVersion(versionId)
@@ -174,13 +168,7 @@ export function CookScreen() {
       },
     })
   }
-  const from = safeFrom(fromParam)
-  const exit = () =>
-    router.replace(
-      (mealParam && from
-        ? recipeInMealHref(recipe.id, mealParam, from)
-        : `/recipes/${recipe.id}`) as Href,
-    )
+  const exit = () => router.replace(`/recipes/${recipe.id}` as Href)
 
   return (
     <View style={[styles.screen, { paddingTop: insets.top }]}>
