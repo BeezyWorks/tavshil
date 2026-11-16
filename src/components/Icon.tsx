@@ -12,6 +12,7 @@ export type IconName =
   | 'trash'
   | 'pause'
   | 'reset'
+  | 'bell'
   | 'bellOff'
   | 'close'
   | 'minus'
@@ -37,6 +38,7 @@ const paths: Record<IconName, string[]> = {
   play: ['M6 4l14 8-14 8z'],
   pause: ['M7 4h3v16H7z', 'M14 4h3v16h-3z'],
   reset: ['M1 4v6h6', 'M3.51 15a9 9 0 1 0 2.13-9.36L1 10'],
+  bell: ['M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9', 'M13.73 21a2 2 0 0 1-3.46 0'],
   bellOff: [
     'M13.73 21a2 2 0 0 1-3.46 0',
     'M18.63 13A17.89 17.89 0 0 1 18 8',
