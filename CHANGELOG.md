@@ -1,3 +1,10 @@
+# [2.15.0](https://github.com/BeezyWorks/tavshil/compare/v2.14.0...v2.15.0) (2026-11-16)
+
+
+### Features
+
+* **app:** add a whole household in one sheet ([3f7a3b6](https://github.com/BeezyWorks/tavshil/commit/3f7a3b6ca96e28b7424c2cf1b4207f6fe5ec4bf2))
+
 # [2.14.0](https://github.com/BeezyWorks/tavshil/compare/v2.13.0...v2.14.0) (2026-11-13)
 
 
