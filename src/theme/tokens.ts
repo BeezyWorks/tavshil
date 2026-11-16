@@ -33,6 +33,11 @@ export const colors = {
   warnSoft: '#FBF1DC',
   info: '#1F4F86',
   infoSoft: '#E6EEF8',
+  /** Quiet translucent fills on the cream ground: the Week | Month toggle, round buttons. */
+  wash: 'rgba(0, 0, 0, 0.06)',
+  washLight: 'rgba(0, 0, 0, 0.05)',
+  /** The empty ring of a tick circle. */
+  ring: '#C9C2B4',
   /** Translucent white for floating chrome (the web nav pill and its buttons). */
   glass: 'rgba(255, 255, 255, 0.72)',
   glassEdge: 'rgba(255, 255, 255, 0.85)',

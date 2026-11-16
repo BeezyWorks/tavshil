@@ -14,12 +14,14 @@ interface Props {
   subtitle?: string
   eyebrow?: string
   back?: { label: string; href: string }
+  /** Above everything else, e.g. the strip that says which meal a recipe is open for. */
+  top?: React.ReactNode
   actions?: React.ReactNode
   children: React.ReactNode
 }
 
 /** A page: centred column, responsive gutters, optional heading row. */
-export function Screen({ title, subtitle, eyebrow, back, actions, children }: Props) {
+export function Screen({ title, subtitle, eyebrow, back, top, actions, children }: Props) {
   const { wide } = useLayout()
   const router = useRouter()
   const insets = useSafeAreaInsets()
@@ -42,6 +44,7 @@ export function Screen({ title, subtitle, eyebrow, back, actions, children }: Pr
       contentInsetAdjustmentBehavior={ios ? 'automatic' : undefined}
     >
       <View style={styles.inner}>
+        {top}
         {back ? (
           <Pressable accessibilityRole="link" onPress={() => goBack(back.href)} style={styles.back}>
             <View style={styles.backInner}>

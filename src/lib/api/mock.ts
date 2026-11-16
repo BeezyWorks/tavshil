@@ -17,7 +17,7 @@ import { DISCLAIMER } from '@/lib/strings'
 import { formatAmount } from '@/lib/units'
 
 import type { TavshilApi } from './client'
-import { bindHouseholds, mockPlan } from './mock-plan'
+import { bindHouseholds, bindVersions, mockPlan } from './mock-plan'
 import {
   buildHouseholds,
   buildMeals,
@@ -130,6 +130,11 @@ function lastServedOf(r: Recipe): ISODate | undefined {
   return dates.sort().pop()
 }
 seedServed()
+bindVersions((vid) => {
+  const v = versionById(vid)
+  const r = recipes.find((x) => x.versions.some((y) => y.id === vid))
+  return v && r ? { recipeId: r.id, title: r.title } : undefined
+})
 
 // ---- Constraint evaluation ----
 

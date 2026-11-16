@@ -18,6 +18,8 @@ import {
 } from '@/components'
 import { useDeleteVersion, useHousehold, useRecipe, useRecordReaction } from '@/lib/api/hooks'
 
+import { MealStrip } from '@/features/plan/MealStrip'
+
 import { AddEquipment } from './AddEquipment'
 import { AddTag } from './AddTag'
 import { EditableTiles } from './EditableTiles'
@@ -95,7 +97,7 @@ export function isCovered(original: string, shown: (string | undefined)[]): bool
 }
 
 export function RecipeScreen() {
-  const { id } = useLocalSearchParams<{ id: string }>()
+  const { id, meal } = useLocalSearchParams<{ id: string; meal?: string }>()
   const { data: recipe, isLoading } = useRecipe(id)
   const [versionId, setVersionId] = useState<string | null>(null)
   const [scale, setScale] = useState(1)
@@ -157,7 +159,8 @@ export function RecipeScreen() {
 
   return (
     <Screen
-      back={{ label: 'Recipes', href: '/recipes' }}
+      top={meal ? <MealStrip /> : undefined}
+      back={meal ? undefined : { label: 'Recipes', href: '/recipes' }}
       eyebrow={[COURSE_LABEL[recipe.course], recipe.form].filter(Boolean).join(' · ')}
       title={recipe.title}
       subtitle={

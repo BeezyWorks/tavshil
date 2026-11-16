@@ -1,139 +1,142 @@
-import { useRouter, type Href } from 'expo-router'
 import React from 'react'
 import { Pressable, StyleSheet, View } from 'react-native'
 
-import { Badge, Text } from '@/components'
+import { Text } from '@/components'
 import type { MealCard } from '@/lib/api/types'
-import { hostedHref, summaryLine } from '@/lib/plan'
-import { colors, fontSize, fonts, radius, space } from '@/theme/tokens'
+import { clock12 } from '@/lib/dates'
+import { colors, fonts, space } from '@/theme/tokens'
 
-import { plural } from './model'
+import { clockShort, dishSummary, plural, slotName } from './model'
+import { usePlanCtx } from './PlanContext'
 
-/** Problem badges for a tile: "1 allergy", "1 gap". */
-export function ProblemBadges({ allergies, gaps }: { allergies: number; gaps: number }) {
+/** `1 allergy to check` (danger) and `1 gap` (warn). `short` drops "to check" for tight columns. */
+export function ProblemLine({
+  allergies,
+  gaps,
+  short,
+}: {
+  allergies: number
+  gaps: number
+  short?: boolean
+}) {
   if (!allergies && !gaps) return null
   return (
-    <View style={styles.badges}>
-      {allergies ? <Badge tone="danger" label={plural(allergies, 'allergy', 'allergies')} /> : null}
-      {gaps ? <Badge tone="warn" label={plural(gaps, 'gap', 'gaps')} /> : null}
+    <View style={styles.problems}>
+      {allergies ? (
+        <Text style={[styles.problem, { color: colors.danger }]}>
+          {`${plural(allergies, 'allergy', 'allergies')}${short ? '' : ' to check'}`}
+        </Text>
+      ) : null}
+      {gaps ? (
+        <Text style={[styles.problem, { color: colors.warn }]}>{plural(gaps, 'gap', 'gaps')}</Text>
+      ) : null}
     </View>
   )
 }
 
-/** One line: the dishes, ellipsized; "Not planned" in muted italic when there are none. */
-export function SummaryLine({ summary }: { summary: string[] }) {
-  return summary.length ? (
-    <Text numberOfLines={1} style={styles.value}>
-      {summaryLine(summary)}
-    </Text>
-  ) : (
-    <Text numberOfLines={1} color={colors.muted} style={[styles.value, { fontStyle: 'italic' }]}>
-      Not planned
-    </Text>
-  )
+/** `Dinner 7:00`, `Leil Shabbat` */
+export function slotText(meal: MealCard, withTime = true): string {
+  const time = withTime && meal.timeText ? ` ${clockShort(clock12(meal.timeText))}` : ''
+  return `${slotName(meal)}${time}`
 }
 
-const kicker = (...parts: (string | number | null | undefined | false)[]) =>
-  parts.filter((p) => p !== null && p !== undefined && p !== false && p !== '').join(' · ')
-
-/** A hosted weekday meal: hosted colour, name and headcount; opens the hosted page. */
-export function HostedSlot({ meal }: { meal: MealCard }) {
-  const router = useRouter()
-  return (
-    <Pressable
-      accessibilityRole="link"
-      accessibilityLabel={`Hosting ${meal.name}, ${meal.headcountText || 'no guests yet'}`}
-      onPress={() => router.push(hostedHref(meal.hostedKey) as Href)}
-      style={[styles.slot, styles.hosted]}
-    >
-      <Text numberOfLines={1} style={[styles.k, { color: colors.info }]}>
-        {kicker('Hosting', meal.slotLabel.toLowerCase(), meal.headcount.total || null)}
-      </Text>
-      <Text numberOfLines={1} style={[styles.value, { color: colors.info }]}>
-        {meal.name}
-      </Text>
-      <ProblemBadges allergies={meal.problems.allergies} gaps={meal.problems.gaps} />
-    </Pressable>
-  )
-}
-
-/** An everyday meal (or the empty "+ Dinner"): tap to fill it in place. */
-export function MealSlot({
+/** A meal in the phone list: slot name, the dish (+ how many more), people, problems. */
+export function PhoneMeal({
   meal,
-  label,
-  onOpen,
+  slotWidth = 52,
+  onPress,
+  people,
 }: {
-  meal?: MealCard
-  label: string
-  onOpen: () => void
+  meal: MealCard
+  slotWidth?: number
+  /** Overrides opening the meal (run meals open their hosted page). */
+  onPress?: () => void
+  people?: boolean
 }) {
-  if (!meal)
-    return (
-      <Pressable
-        accessibilityRole="button"
-        accessibilityLabel={`Add ${label.toLowerCase()}`}
-        onPress={onOpen}
-        style={[styles.slot, styles.add]}
-      >
-        <Text color={colors.muted} align="center" style={{ fontSize: fontSize.sm }}>
-          {`+ ${label}`}
-        </Text>
-      </Pressable>
-    )
+  const { openMeal } = usePlanCtx()
+  const { lead, more } = dishSummary(meal)
+  const headcount = people && meal.headcount.total ? ` · ${meal.headcount.total} people` : ''
   return (
     <Pressable
       accessibilityRole="button"
-      accessibilityLabel={`${meal.name}: ${meal.summary.length ? summaryLine(meal.summary) : 'not planned'}. Edit`}
-      onPress={onOpen}
-      style={styles.slot}
+      accessibilityLabel={`${slotName(meal)}: ${lead || 'not planned'}${more ? ` and ${more} more` : ''}`}
+      onPress={onPress ?? (() => openMeal(meal))}
+      style={styles.phoneMeal}
     >
-      <Text numberOfLines={1} style={styles.k}>
-        {kicker(label, meal.timeText, meal.headcount.total || null)}
+      <Text style={[styles.slot, { width: slotWidth }]} numberOfLines={1}>
+        {slotName(meal)}
       </Text>
-      <SummaryLine summary={meal.summary} />
+      <View style={styles.grow}>
+        {lead ? (
+          <Text style={styles.dish}>
+            {lead}
+            {more || headcount ? (
+              <Text style={styles.more}>{`${more ? ` +${more}` : ''}${headcount}`}</Text>
+            ) : null}
+          </Text>
+        ) : (
+          <Text style={[styles.dish, { color: colors.muted, fontFamily: fonts.body }]}>
+            {meal.virtual || !meal.planned ? 'Not planned' : meal.name}
+          </Text>
+        )}
+        <ProblemLine allergies={meal.problems.allergies} gaps={meal.problems.gaps} />
+      </View>
     </Pressable>
   )
 }
 
-/** A meal inside a run tile: same height every time, one-line summary. */
-export function RunSlot({ meal }: { meal: MealCard }) {
+/** A meal in a wide day column: slot, dish, `+2 · 1 allergy`. */
+export function ColumnMeal({ meal }: { meal: MealCard }) {
+  const { openMeal, selected } = usePlanCtx()
+  const { lead, more } = dishSummary(meal)
+  const on = !!selected?.meal && selected.meal.id === meal.id
   return (
-    <View style={[styles.slot, styles.runSlot]}>
-      <Text numberOfLines={1} style={styles.k}>
-        {kicker(meal.name, meal.headcount.total || null)}
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={`${slotName(meal)}: ${lead || 'not planned'}${more ? ` and ${more} more` : ''}`}
+      onPress={() => openMeal(meal)}
+      style={[styles.col, on && styles.colOn]}
+    >
+      <Text style={styles.colSlot} numberOfLines={1}>
+        {slotText(meal)}
       </Text>
-      <SummaryLine summary={meal.summary} />
-    </View>
+      <Text
+        style={[styles.colDish, !lead && { color: colors.muted, fontFamily: fonts.body }]}
+        numberOfLines={3}
+      >
+        {lead || 'Not planned'}
+      </Text>
+      {more || meal.problems.allergies || meal.problems.gaps ? (
+        <Text style={styles.colMore} numberOfLines={2}>
+          {more ? `+${more}` : ''}
+          {more && (meal.problems.allergies || meal.problems.gaps) ? ' · ' : ''}
+          {meal.problems.allergies ? (
+            <Text style={{ color: colors.danger, fontFamily: fonts.bodySemiBold }}>
+              {plural(meal.problems.allergies, 'allergy', 'allergies')}
+            </Text>
+          ) : null}
+          {meal.problems.gaps ? (
+            <Text style={{ color: colors.warn, fontFamily: fonts.bodySemiBold }}>
+              {`${meal.problems.allergies ? ' · ' : ''}${plural(meal.problems.gaps, 'gap', 'gaps')}`}
+            </Text>
+          ) : null}
+        </Text>
+      ) : null}
+    </Pressable>
   )
 }
 
 const styles = StyleSheet.create({
-  slot: {
-    borderRadius: 8,
-    paddingVertical: 6,
-    paddingHorizontal: space.sm,
-    backgroundColor: colors.subtle,
-    minWidth: 0,
-    gap: 2,
-  },
-  runSlot: { height: 48, backgroundColor: colors.surface, justifyContent: 'center' },
-  hosted: { backgroundColor: colors.infoSoft },
-  add: {
-    backgroundColor: 'transparent',
-    borderWidth: 1,
-    borderStyle: 'dashed',
-    borderColor: colors.line,
-    minHeight: 36,
-    justifyContent: 'center',
-    borderRadius: radius.tile - 4,
-  },
-  k: {
-    fontFamily: fonts.bodySemiBold,
-    fontSize: 11,
-    letterSpacing: 0.6,
-    textTransform: 'uppercase',
-    color: colors.muted,
-  },
-  value: { fontFamily: fonts.body, fontSize: fontSize.sm },
-  badges: { flexDirection: 'row', flexWrap: 'wrap', gap: space.xs, marginTop: 2 },
+  problems: { flexDirection: 'row', flexWrap: 'wrap', gap: space.sm },
+  problem: { fontFamily: fonts.bodySemiBold, fontSize: 13 },
+  phoneMeal: { flexDirection: 'row', alignItems: 'baseline', gap: 8, minHeight: 28 },
+  grow: { flex: 1, gap: 2, minWidth: 0 },
+  slot: { fontFamily: fonts.body, fontSize: 13, color: colors.muted },
+  dish: { fontFamily: fonts.bodySemiBold, fontSize: 16, color: colors.ink },
+  more: { fontFamily: fonts.body, color: colors.muted },
+  col: { gap: 1, borderRadius: 8, marginHorizontal: -4, paddingHorizontal: 4, paddingVertical: 2 },
+  colOn: { backgroundColor: colors.accentSoft },
+  colSlot: { fontFamily: fonts.body, fontSize: 11, color: colors.muted },
+  colDish: { fontFamily: fonts.bodySemiBold, fontSize: 14, lineHeight: 18, color: colors.ink },
+  colMore: { fontFamily: fonts.body, fontSize: 12, color: colors.muted },
 })
