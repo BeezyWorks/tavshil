@@ -1,3 +1,35 @@
+# [3.0.0](https://github.com/BeezyWorks/tavshil/compare/v2.15.0...v3.0.0) (2026-11-16)
+
+
+* feat(worker)!: drop draft and accepted meals; prep done marks and richer shopping lines ([aefcf42](https://github.com/BeezyWorks/tavshil/commit/aefcf42e9eefe42b87194b8f63c99007f7c34b49))
+
+
+### Bug Fixes
+
+* **plan:** open a weeknight dinner instantly, on its dishes ([6a95578](https://github.com/BeezyWorks/tavshil/commit/6a95578c6745d078c878f1d0b2587536aebfc5ac))
+
+
+### Features
+
+* **app:** cream ground and grouped-surface theme tokens ([a0c2695](https://github.com/BeezyWorks/tavshil/commit/a0c269578d065b57272c311646c1d9625e544e7b))
+* **app:** native tabs on iOS and a new top nav on web ([de70463](https://github.com/BeezyWorks/tavshil/commit/de70463aeafdd4df6af8d56b82933b4bf324f417))
+* **app:** plan page with tonight card, every meal, month on phone, dinner sheet and panel ([476ca83](https://github.com/BeezyWorks/tavshil/commit/476ca83ceec3398f9d7c0bd0e069684360431297))
+* **app:** prep and shopping API without accepting ([d931614](https://github.com/BeezyWorks/tavshil/commit/d93161402a223d5a22c01e8b307abe74a0e7e70d))
+* **app:** prep and shopping screens with meal filters ([80a1b3a](https://github.com/BeezyWorks/tavshil/commit/80a1b3a856d664b4132863b1d7d03c25fa46ba40))
+* **app:** prep reminders as local notifications ([716a5f0](https://github.com/BeezyWorks/tavshil/commit/716a5f00378b51f9a7f3d68e139810ccb34ff193))
+* **app:** reminders bell on Prep; reminders route shared by Prep and More ([dadeb6f](https://github.com/BeezyWorks/tavshil/commit/dadeb6ff7f4089c2ebd2069e80fd4b1d5e14c8bc))
+* **core:** prep task keys and rest cut-off, per-meal shopping needs, buy-by and staples ([1959a00](https://github.com/BeezyWorks/tavshil/commit/1959a0038ea09e619c596cee9b3f29a85dff4d17))
+
+
+### BREAKING CHANGES
+
+* the accept_meals MCP tool is gone, includeDrafts is ignored, and meal views no
+longer carry status or acceptedAt. POST /meals/accept and /meals/reopen stay for one release as
+documented no-ops so older app builds keep working.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01MYqSyN1gvQoC5H6LwJuafh
+
 # [2.15.0](https://github.com/BeezyWorks/tavshil/compare/v2.14.0...v2.15.0) (2026-11-16)
 
 
