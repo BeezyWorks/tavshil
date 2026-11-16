@@ -12,7 +12,7 @@
     "db:generate": "pnpm --filter @tavshil/worker db:generate",
     "db:migrate:local": "wrangler d1 migrations apply tavshil --local",
     "db:migrate:remote": "wrangler d1 migrations apply tavshil --remote",
-    "test": "pnpm -r --filter ./packages/core --filter ./worker test",
+    "test": "vitest run && pnpm -r --filter ./packages/core --filter ./worker test",
     "typecheck": "tsc --noEmit && pnpm -r --filter ./packages/core --filter ./worker typecheck",
     "format": "prettier --write .",
     "ship": "scripts/build-local.sh",
@@ -60,6 +60,7 @@
     "@types/react-dom": "~19.2.7",
     "prettier": "^3.9.6",
     "typescript": "~6.0.3",
+    "vitest": "^4.1.12",
     "wrangler": "^4.40.0"
   }
 }

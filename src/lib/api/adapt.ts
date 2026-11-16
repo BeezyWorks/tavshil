@@ -1012,7 +1012,10 @@ interface ServerPrepDay {
     label: string
     dish: string
     kind: 'active' | 'passive' | 'setup'
+    start?: number
     startText: string | null
+    end?: number | null
+    endDate?: string | null
     notes: string[]
   }[]
   flags: { text: string }[]
@@ -1034,6 +1037,10 @@ export function adaptPrep(days: ServerPrepDay[]): PrepDay[] {
             : t.label,
         mealName: mealName(t.mealId),
         passive: t.kind === 'passive' || undefined,
+        kind: t.kind,
+        ...(typeof t.start === 'number' && { startMin: t.start }),
+        ...(typeof t.end === 'number' && { endMin: t.end }),
+        ...(t.endDate && { endDate: t.endDate }),
       })),
       note: [...d.notes, ...d.flags.map((f) => f.text)].join('. ') || undefined,
     }

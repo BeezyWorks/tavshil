@@ -38,3 +38,21 @@ export const NAV = [
   { href: '/use-soon', label: 'Use soon' },
   { href: '/settings', label: 'Settings' },
 ] as const
+
+export const REMINDERS = {
+  title: 'Prep reminders',
+  settingsHint: 'A nudge for the prep that has to start early. On this phone only.',
+  prePrep: 'Thaw, marinate, soak, rise',
+  prePrepHint: 'Things you’d forget. Recommended.',
+  cooking: 'Start cooking',
+  cookingHint: '“Start the kugel by 2:00 pm”',
+  lead: 'Remind me',
+  leadLabel: { 0: 'At the time', 15: '15 min before', 30: '30 min before', 60: '60 min before' },
+  restTitle: 'Never on Shabbat or Yom Tov',
+  restBody:
+    'Nothing rings once candles are lit. A reminder that would fall then comes earlier instead, before candle lighting.',
+  footnote:
+    'Reminders are set on this phone. They update whenever the plan changes and the app is opened.',
+  denied:
+    'Notifications are off for Tavshil. Turn them on in your phone’s Settings to get reminders.',
+} as const

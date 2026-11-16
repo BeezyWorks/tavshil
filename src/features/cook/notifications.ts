@@ -20,6 +20,9 @@ export interface TimerTarget {
 /** Local notifications need a native build; on the web the in-app timers are all there is. */
 export const canNotify = Platform.OS !== 'web'
 
+/** `data.kind` on a prep reminder (see `features/reminders`), whose `data.url` is where a tap goes. */
+export const PREP_REMINDER_KIND = 'prep-reminder'
+
 export const cookHref = (t: TimerTarget): Href =>
   `/cook/${t.versionId}?step=${t.step}${t.scale && t.scale !== 1 ? `&scale=${t.scale}` : ''}` as Href
 
@@ -113,8 +116,14 @@ function useNativeTimerTapRouting(onTap?: () => void) {
     const id = response.notification.request.identifier
     if (handled.current === id) return
     handled.current = id
+    const data = response.notification.request.content.data as
+      (Partial<TimerTarget> & { kind?: string; url?: string }) | undefined
+    // A prep reminder opens the recipe or the prep list; it is not a timer, so nothing to silence.
+    if (data?.kind === PREP_REMINDER_KIND) {
+      if (data.url) router.navigate(data.url as Href)
+      return
+    }
     onTap?.()
-    const data = response.notification.request.content.data as Partial<TimerTarget> | undefined
     if (!data?.versionId || typeof data.step !== 'number') return
     router.navigate(cookHref({ versionId: data.versionId, step: data.step, scale: data.scale }))
   }, [response, router, onTap])

@@ -498,6 +498,12 @@ export interface PrepTask {
   text: string
   mealName: string
   passive?: boolean
+  /** Machine-readable fields, for scheduling reminders. `startMin` is minutes since midnight on the day. */
+  kind?: 'active' | 'passive' | 'setup'
+  startMin?: number
+  endMin?: number
+  /** Set when the task ends on a later day (a long marinade). */
+  endDate?: ISODate
 }
 
 export interface PrepDay {
