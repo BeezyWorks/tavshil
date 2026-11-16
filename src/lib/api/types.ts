@@ -530,6 +530,10 @@ export interface PrepTask {
   dish: string
   kind: 'active' | 'passive' | 'setup'
   passive?: boolean
+  /** Minutes since midnight on the task's day, for scheduling reminders. */
+  startMin?: number
+  /** Minutes since midnight on `endDate` (or the task's day). */
+  endMin?: number
   /** Null for a task about no one meal (the eruv tavshilin). */
   mealId: Id | null
   mealName: string

@@ -5,6 +5,7 @@ import {
   Badge,
   Button,
   Card,
+  ListRow,
   Loading,
   Screen,
   SectionHeader,
@@ -18,6 +19,8 @@ import { stale, useApiKeys, useApiMutation, useHouseholdInfo, usePrefs } from '@
 import type { CreatedApiKey } from '@/lib/api/types'
 import { MCP_URL, OPENAPI_URL, REST_URL } from '@/lib/config'
 import { previewAlarm, stopAlarm } from '@/features/cook/alarm'
+import { canNotify } from '@/features/cook/notifications'
+import { REMINDERS } from '@/lib/strings'
 import { ALARM_SOUNDS } from '@/features/cook/sounds'
 import { ALARM_SOUND_IDS, setUnits, useAlarmSound, useKeepAwakePref } from '@/lib/prefs'
 import { colors, radius, space } from '@/theme/tokens'
@@ -52,6 +55,16 @@ export function SettingsScreen() {
       <HouseholdCard />
       <UnitsCard />
       <CookingCard />
+      {canNotify ? (
+        <Card>
+          <ListRow
+            title={REMINDERS.title}
+            subtitle={REMINDERS.settingsHint}
+            href="/reminders"
+            last
+          />
+        </Card>
+      ) : null}
       <ConnectCard />
       <KeysCard />
       <AccountCard />

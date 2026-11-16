@@ -1034,7 +1034,9 @@ interface ServerPrepTask {
   versionId: string | null
   guessedTimes: boolean
   kind: 'active' | 'passive' | 'setup'
+  start?: number | null
   startText: string | null
+  end?: number | null
   endText: string | null
   endDate?: string
   notes: string[]
@@ -1075,6 +1077,8 @@ export function adaptPrepTask(t: ServerPrepTask, mealName?: string): PrepTask {
     dish: t.dish,
     kind: t.kind,
     passive: t.kind === 'passive' || undefined,
+    ...(typeof t.start === 'number' && { startMin: ((t.start % 1440) + 1440) % 1440 }),
+    ...(typeof t.end === 'number' && { endMin: ((t.end % 1440) + 1440) % 1440 }),
     mealId: t.mealId || null,
     mealName: t.mealLabel ?? mealName ?? '',
     ...(t.mealDate && { mealDate: t.mealDate }),

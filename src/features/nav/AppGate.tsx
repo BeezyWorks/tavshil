@@ -1,10 +1,12 @@
 import React from 'react'
 
 import { AuthGate } from '@/features/account/AuthGate'
+import { usePrepReminders } from '@/features/reminders/useReminders'
 import { useSyncPrefs } from '@/features/settings/useSyncPrefs'
 
 function Synced({ children }: { children: React.ReactNode }) {
   useSyncPrefs()
+  usePrepReminders()
   return <>{children}</>
 }
 
