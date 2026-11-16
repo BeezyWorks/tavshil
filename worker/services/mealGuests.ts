@@ -5,7 +5,6 @@ import { and, eq, inArray, isNull } from 'drizzle-orm'
 import * as s from '../db/schema'
 import { inChunks, unique, type Actor, type Db } from './ctx'
 import { householdLocation } from './households'
-import type { MealRow } from './plans'
 
 /** Marks people present or absent on a meal, reviving rows that were removed earlier (the pair is unique). */
 export async function setPresent(db: Db, mealId: string, personIds: string[], present: boolean) {
@@ -78,12 +77,4 @@ export async function autoNameFor(
   const loc = await householdLocation(db, actor.householdId)
   const day = calendarDays(date, date, loc)[0]
   return autoMealName(day, slot)
-}
-
-export async function reopenIfAccepted(db: Db, meal: MealRow) {
-  if (meal.status === 'accepted')
-    await db
-      .update(s.meals)
-      .set({ status: 'draft', acceptedAt: null })
-      .where(eq(s.meals.id, meal.id))
 }

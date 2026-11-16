@@ -60,6 +60,7 @@ export {
   type PrepMeal,
   type PrepOptions,
   type PrepSchedule,
+  type PrepRest,
   type PrepTask,
   type PrePrepStep,
 } from './prep'

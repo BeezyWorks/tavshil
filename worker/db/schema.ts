@@ -464,6 +464,11 @@ export const ingredients = sqliteTable(
     gramsPerPiece: real('grams_per_piece'),
     /** Where the density / piece weight came from. */
     sources: text('sources', { mode: 'json' }).$type<Record<string, FlagSource>>(),
+    /**
+     * A pantry staple (salt, oil, flour): folded into "probably in the pantry" on the shopping list. Null = the
+     * default for its name (`isPantryStaple` in core); a household's own row overrides it either way.
+     */
+    staple: integer('staple', { mode: 'boolean' }),
   },
   (t) => [
     index('ingredients_household_idx').on(t.householdId),
@@ -532,6 +537,7 @@ export const meals = sqliteTable(
     guestOf: text('guest_of'),
     /** The name was typed by the user: moving the meal to another day does not rename it. */
     nameEdited: integer('name_edited', { mode: 'boolean' }).notNull().default(false),
+    /** Legacy: meals are no longer accepted (every meal with dishes counts). Kept for sync; not read. */
     status: text('status', { enum: ['draft', 'accepted'] })
       .notNull()
       .default('draft'),
@@ -595,7 +601,7 @@ export const mealItems = sqliteTable(
     broughtBy: text('brought_by'),
     description: text('description'),
     kashrut: text('kashrut', { enum: dishCategory }),
-    /** Checked off on the accepted menu. */
+    /** Checked off on the menu. */
     done: integer('done', { mode: 'boolean' }).notNull().default(false),
   },
   (t) => [
@@ -694,7 +700,7 @@ export const equipment = sqliteTable(
   (t) => [index('equipment_household_idx').on(t.householdId)],
 )
 
-/** Order, checked state and manual lines only; totals come from accepted meals minus pantry. */
+/** Order, checked state and manual lines only; totals come from the planned meals minus pantry. */
 export const shoppingList = sqliteTable(
   'shopping_list',
   {
@@ -712,6 +718,28 @@ export const shoppingList = sqliteTable(
   (t) => [
     index('shopping_household_idx').on(t.householdId, t.position),
     index('shopping_ingredient_idx').on(t.ingredientId),
+  ],
+)
+
+/**
+ * A prep task ticked off. Tasks are computed (the prep schedule), so the mark is stored against the task's stable key
+ * (`<mealId>:<dishId>:cook`, `eruv:<date>`); a mark whose task no longer exists is simply never shown.
+ */
+export const prepDone = sqliteTable(
+  'prep_done',
+  {
+    ...base(),
+    householdId: text('household_id')
+      .notNull()
+      .references(() => households.id),
+    /** The meal the task is for; null for tasks about no one meal (the eruv tavshilin). */
+    mealId: text('meal_id').references(() => meals.id),
+    taskKey: text('task_key').notNull(),
+    doneAt: integer('done_at').notNull(),
+  },
+  (t) => [
+    uniqueIndex('prep_done_uq').on(t.householdId, t.taskKey),
+    index('prep_done_meal_idx').on(t.mealId),
   ],
 )
 

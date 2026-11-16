@@ -10,6 +10,7 @@ import * as kitchen from './services/kitchen'
 import * as people from './services/people'
 import * as planning from './services/planning'
 import * as publicRecipes from './services/publicRecipes'
+import * as prep from './services/prep'
 import * as prefs from './services/prefs'
 import * as recipes from './services/recipes'
 import * as sharing from './services/sharing'
@@ -97,13 +98,12 @@ export const TOOLS: Tool[] = [
     name: 'get_calendar',
     title: 'Get calendar',
     description:
-      'Days with Hebrew dates, parsha, holidays (holidayDetails marks each Jewish or civil, such as Thanksgiving), candle lighting, havdalah, the household’s meals on each day and that day’s cooking (cooking.tasks and a one-line summary, for accepted meals; pass includeDrafts to count drafts too). Use it to find any date ("this Shabbat", "Rosh Hashana") and to see what is already planned. Defaults to the next 14 days from today; pass includeOccasions for the coming Shabbatot and Yom Tovim grouped as occasions.',
+      'Days with Hebrew dates, parsha, holidays (holidayDetails marks each Jewish or civil, such as Thanksgiving), candle lighting, havdalah, the household’s meals on each day and that day’s cooking (cooking.tasks and a one-line summary, for every meal with dishes). Use it to find any date ("this Shabbat", "Rosh Hashana") and to see what is already planned. Defaults to the next 14 days from today; pass includeOccasions for the coming Shabbatot and Yom Tovim grouped as occasions.',
     readOnly: true,
     input: z.object({
       from: S.date.optional(),
       to: S.date.optional(),
       days: S.int.optional().describe('How many days from `from` (default 14, at most 400)'),
-      includeDrafts: z.boolean().optional().describe('Count draft meals in the cooking tasks'),
       includeOccasions: z.boolean().optional(),
     }),
     run: async (c, a) => {
@@ -279,7 +279,7 @@ export const TOOLS: Tool[] = [
     name: 'update_meal',
     title: 'Update a meal',
     description:
-      'Change a meal: name, date, slot, time (e.g. 18:30; null clears it), kind, hosted, who is coming (personIds, addPersonIds, removePersonIds), and its items: addItems (a recipe version with scale or servings, or a brought dish such as "Ruth is bringing potatoes" or just {by, course} for "the Golds are bringing a side"), guestOf ("the Blochs" when we are guests at their table; null when we host), removeItemIds, updateItems, order. Changing the menu or the people of an accepted meal turns it back into a draft for review. Confirm with the host first.',
+      'Change a meal: name, date, slot, time (e.g. 18:30; null clears it), kind, hosted, who is coming (personIds, addPersonIds, removePersonIds), and its items: addItems (a recipe version with scale or servings, or a brought dish such as "Ruth is bringing potatoes" or just {by, course} for "the Golds are bringing a side"), guestOf ("the Blochs" when we are guests at their table; null when we host), removeItemIds, updateItems, order. The meal counts for shopping and prep as soon as it has dishes, so after a change read its dining brief and show the host any problems. Confirm with the host first.',
     input: S.updateMealInput.extend({ mealId: S.id }),
     run: async (c, { mealId, ...rest }) =>
       ok('Meal updated.', await planning.updateMeal(c.db, c.actor, mealId, rest as never)),
@@ -322,36 +322,15 @@ export const TOOLS: Tool[] = [
     },
   }),
   tool({
-    name: 'accept_meals',
-    title: 'Accept meals',
-    description:
-      'Accept draft meals, by ids, for one date, or for a range (all of Shabbat, all of Yom Tov). Accepting holds the use-soon items the menu needs and puts the meals into the shopping list and prep schedule. A meal whose brief has hard problems (meat with dairy, a strict allergy exclusion) is not accepted and comes back as blocked with the problems: show them to the host. Use force only if the host explicitly says to go ahead. Offer the next meal afterwards.',
-    input: z.object({
-      mealIds: z.array(S.id).optional(),
-      date: S.date.optional(),
-      from: S.date.optional(),
-      to: S.date.optional(),
-      force: z.boolean().optional(),
-    }),
-    run: async (c, a) => {
-      const r = await planning.acceptMeals(c.db, c.actor, a)
-      return ok(
-        `Accepted ${r.accepted.length}${r.blocked.length ? `, blocked ${r.blocked.length}` : ''}.`,
-        r,
-      )
-    },
-  }),
-  tool({
     name: 'get_menu',
     title: 'Get menu',
     description:
-      '"What’s for dinner?": the accepted menus for a date or range with their items by course. Pass includeDrafts to see unaccepted meals too. Defaults to the next 7 days.',
+      '"What’s for dinner?": the menus for a date or range with their items by course. Defaults to the next 7 days.',
     readOnly: true,
     input: z.object({
       date: S.date.optional(),
       from: S.date.optional(),
       to: S.date.optional(),
-      includeDrafts: z.boolean().optional(),
     }),
     run: async (c, a) => ok('Menu.', await planning.getMenu(c.db, c.actor, a)),
   }),
@@ -359,14 +338,27 @@ export const TOOLS: Tool[] = [
     name: 'get_prep_schedule',
     title: 'Get prep schedule',
     description:
-      'The cooking plan for accepted meals, worked back from each meal’s time: per-day task lists such as "Thursday night: marinate chicken (12h). Friday by 2pm: kugel, soup". Active work is never scheduled on Shabbat or Yom Tov; it flags eruv tavshilin and cooking on Yom Tov for after Yom Tov. Defaults to the next 14 days.',
+      'The cooking plan for every meal with dishes, worked back from each meal’s time: per-day task lists such as "Thursday night: marinate chicken (12h). Friday by 2pm: kugel, soup". Each task has a key, its meal, dish and recipe, and whether it is done; dishes with guessedTimes had no cooking times, so 30 minutes was assumed (say so). Days before Shabbat or Yom Tov carry rest: when hands-on cooking ends and candle lighting. Active work is never scheduled on Shabbat or Yom Tov; it flags eruv tavshilin and cooking on Yom Tov for after Yom Tov. Defaults to the next 14 days; pass mealIds for only those meals.',
     readOnly: true,
     input: z.object({
       from: S.date.optional(),
       to: S.date.optional(),
-      includeDrafts: z.boolean().optional(),
+      mealIds: z.array(S.id).optional(),
     }),
-    run: async (c, a) => ok('Prep schedule.', await shopping.getPrepSchedule(c.db, c.actor, a)),
+    run: async (c, a) => ok('Prep schedule.', await prep.getPrepSchedule(c.db, c.actor, a)),
+  }),
+  tool({
+    name: 'mark_prep_done',
+    title: 'Mark prep done',
+    description:
+      'Tick prep tasks off as done ("I marinated the chicken"), or back on, by their key from get_prep_schedule. Done marks only change the checklist, never the schedule.',
+    input: z.object({
+      marks: z.array(z.object({ key: z.string().min(1), done: z.boolean() })).min(1),
+    }),
+    run: async (c, a) => {
+      const r = await prep.setPrepDone(c.db, c.actor, a)
+      return ok(r.message, r)
+    },
   }),
 
   // ---------------------------------------------------------------------------------------------------------------
@@ -616,7 +608,7 @@ export const TOOLS: Tool[] = [
     name: 'get_use_soon',
     title: 'Get use-soon list',
     description:
-      'Perishables to use up before they go bad (not a pantry inventory), soonest first: each with its use-by date and effective expiry (chametz expires at the pre-Pesach cutoff), quantity if known, whether it is expired or expires soon, and what is held aside for accepted menus. Expired items are never suggested; items expiring soon are boosted.',
+      'Perishables to use up before they go bad (not a pantry inventory), soonest first: each with its use-by date and effective expiry (chametz expires at the pre-Pesach cutoff), quantity if known, whether it is expired or expires soon, and what is held aside for planned menus. Expired items are never suggested; items expiring soon are boosted.',
     readOnly: true,
     input: empty,
     run: async (c) => ok('Use soon.', await kitchen.listPantry(c.db, c.actor)),
@@ -683,9 +675,13 @@ export const TOOLS: Tool[] = [
     name: 'get_shopping_list',
     title: 'Get shopping list',
     description:
-      'The shopping list: one line per ingredient with the total needed across accepted meals (default: the next 30 days) minus unexpired use-soon items, with checked state, order and sourcing notes ("buy chalav Yisrael butter"). Brought dishes are not included.',
+      'The shopping list: one line per ingredient with the total needed across every meal with dishes (default: the next 30 days) minus unexpired use-soon items, with checked state, order and sourcing notes ("buy chalav Yisrael butter"). Each line lists the meals and dishes that need it with each meal’s amount, buyBy (the date it is first needed: the meal, or earlier when a step such as thawing starts the day before) and staple (salt, oil, flour: probably in the pantry). Pass mealIds for only those meals’ amounts (total then gives the amount across every meal). Brought dishes are not included.',
     readOnly: true,
-    input: z.object({ from: S.date.optional(), to: S.date.optional() }),
+    input: z.object({
+      from: S.date.optional(),
+      to: S.date.optional(),
+      mealIds: z.array(S.id).optional(),
+    }),
     run: async (c, a) => ok('Shopping list.', await shopping.getShoppingList(c.db, c.actor, a)),
   }),
   tool({
@@ -713,7 +709,7 @@ export const TOOLS: Tool[] = [
     name: 'update_ingredient',
     title: 'Update an ingredient',
     description:
-      'Correct a catalog ingredient: category (meat, dairy, parve, fish), allergens, flags (chametz, kitniyot, gebrokts, animal_derived, egg, honey, grain…), aliases and transliterations, density (g/ml) or grams per piece. Data you enter here is labelled as vouched for by a person (source user) rather than AI-filled; only do that when the host tells you or you are certain. Find an ingredient by name or id.',
+      'Correct a catalog ingredient: category (meat, dairy, parve, fish), allergens, flags (chametz, kitniyot, gebrokts, animal_derived, egg, honey, grain…), aliases and transliterations, density (g/ml), grams per piece, or whether it is a pantry staple (staple: folded into "probably in the pantry" on the shopping list). Data you enter here is labelled as vouched for by a person (source user) rather than AI-filled; only do that when the host tells you or you are certain. Find an ingredient by name or id.',
     input: z.object({
       id: S.id.optional(),
       name: z.string().optional(),
@@ -736,6 +732,7 @@ export const TOOLS: Tool[] = [
             flags: a.flags,
             densityGPerMl: a.densityGPerMl,
             gramsPerPiece: a.gramsPerPiece,
+            staple: a.staple,
           },
         }),
       ),

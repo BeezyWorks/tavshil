@@ -315,7 +315,6 @@ export interface CalendarHoliday {
 export interface MealChip {
   id: Id
   name: string
-  status: 'draft' | 'accepted'
   /** Null while the meal has no declared type and no dishes. */
   kind: Kind | null
   itemCount: number
@@ -339,7 +338,7 @@ export interface CalendarDay {
   /** "5:48 PM", at the end of Shabbat and Yom Tov. */
   havdalah?: string
   meals: MealChip[]
-  /** What has to be cooked on this day, from accepted and draft menus. */
+  /** What has to be cooked on this day, from every meal with dishes. */
   cooking: CookingTask[]
 }
 
@@ -378,7 +377,7 @@ export interface MealItem {
   activeMin: number
   /** Someone else is bringing this dish: it counts for balance and kashrut, not cooking. */
   broughtBy?: string
-  /** Checked off on the accepted menu. */
+  /** Checked off on the menu. */
   done?: boolean
   adjustments: string[]
 }
@@ -390,7 +389,6 @@ export interface Meal {
   kind: Kind
   /** False when the meal has no declared type yet (`kind` is then only a fallback). */
   kindDeclared?: boolean
-  status: 'draft' | 'accepted'
   time: string
   /** People who are not coming. */
   notComing: Id[]
@@ -427,7 +425,7 @@ export interface MealReview {
   handsOnMin: number
   adjustments: { item: string; text: string }[]
   issues: string[]
-  /** Problems that do not block accepting. */
+  /** Problems to look at; nothing blocks a meal. */
   warnings?: string[]
   sourcing: string[]
   shopping: string[]
@@ -481,33 +479,104 @@ export type MenuItemInput = { versionId: Id; scale?: number } | { brought: Broug
 
 // ---- Shopping, prep, pantry ----
 
+/** One meal that needs a shopping line. */
+export interface ShoppingLineMeal {
+  mealId: Id
+  name: string
+  date: ISODate
+  /** Dish titles that use it, e.g. `["Silan chicken"]`. */
+  dishes: string[]
+  /** This meal's amount, e.g. `1 kg`, or `as needed`. */
+  amount: string
+  /** In the meal filter asked for (always true for the whole list). */
+  selected: boolean
+}
+
 export interface ShoppingLine {
   id: Id
   name: string
-  /** Display text for the amount still to buy, e.g. `½ onion` or `200 g`. */
+  /**
+   * Display text for the amount still to buy, e.g. `½ onion` or `200 g`. With a meal filter: what just
+   * those meals need.
+   */
   need: string
   have?: string
   note?: string
   checked: boolean
   custom?: boolean
+  /** The meals that need it, in date order, with their dishes and amounts. Empty for a manual line. */
+  meals: ShoppingLineMeal[]
+  /** The earliest date it is needed: the meal, or earlier when a step such as thawing starts the day before. */
+  buyBy?: ISODate
+  /** A pantry staple (salt, oil, flour): fold it into "Probably in the pantry". */
+  staple: boolean
+  /** With a meal filter, when other meals need it too: the amount across every meal, e.g. `2.5 kg`. */
+  total?: string
 }
 
 export interface PrepTask {
+  /** The task's stable key: tick it off with `setPrepDone`. */
   id: Id
+  /** Start, e.g. `5:50 PM`. */
   time: string
+  /** End, when it has one (`6:20 PM`). */
+  endTime?: string
+  /** Set when it ends on a later day (a long marinade). */
+  endDate?: ISODate
+  /** `Cook Silan chicken`, or `Marinate (12h) (Silan chicken)` when the label does not name the dish. */
   text: string
-  mealName: string
+  label: string
+  /** Dish title; empty for a task about no one dish (the eruv tavshilin, the blech). */
+  dish: string
+  kind: 'active' | 'passive' | 'setup'
   passive?: boolean
+  /** Null for a task about no one meal (the eruv tavshilin). */
+  mealId: Id | null
+  mealName: string
+  mealDate?: ISODate
+  /** When the meal is served, e.g. `7:00 PM`. */
+  mealTime?: string
+  /** The meal item (dish) the task is for. */
+  itemId?: Id
+  /** Open the recipe or cooking mode. */
+  recipeId?: Id
+  versionId?: Id
+  /** The recipe has no cooking times, so 30 minutes was assumed ("30 min guessed · Add times"). */
+  guessedTimes: boolean
+  notes: string[]
+  done: boolean
+}
+
+/** Shabbat or Yom Tov beginning on the evening of a prep day: the cut-off line and the block after it. */
+export interface PrepRest {
+  kind: 'shabbat' | 'yomtov' | 'yomtov_shabbat'
+  /** `Shabbat`, `Yom Tov`, `Yom Tov and Shabbat`. */
+  label: string
+  /** Hands-on cooking ends, e.g. `3:56 PM`. */
+  handsOnEnds: string
+  candleLighting: string
+  /** When it ends (havdalah). */
+  untilDate: ISODate
+  until: string
 }
 
 export interface PrepDay {
   id: Id
   label: string
   date: ISODate
+  hebrew?: string
   tasks: PrepTask[]
+  /** The meals served that day. */
+  meals: { mealId: Id; name: string; time: string }[]
   /** Set on days nothing is scheduled, e.g. Shabbat. */
   note?: string
   flags?: string[]
+  /** Candle lighting that day, e.g. `4:16 PM`. */
+  candleLighting?: string
+  /** Set on the day Shabbat or Yom Tov begins. */
+  rest?: PrepRest
+  /** Shabbat or Yom Tov itself. */
+  restDay?: boolean
 }
 
 export interface PantryItem {
@@ -517,7 +586,7 @@ export interface PantryItem {
   quantity: string
   /** Use-by date (for chametz, the pre-Pesach cutoff if that is sooner). */
   expires?: ISODate
-  /** Held aside for an accepted menu. */
+  /** Held aside for a planned menu. */
   heldFor?: string
   expired?: boolean
   expiringSoon?: boolean
@@ -707,7 +776,6 @@ export interface MealCard {
   time: number | null
   /** 24-hour `HH:MM`. */
   timeText: string | null
-  status: 'draft' | 'accepted'
   kind: Kind | null
   /** Has a full page: flagged, in a run, or has a guest from another household. */
   hosted: boolean
