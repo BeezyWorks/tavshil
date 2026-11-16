@@ -851,8 +851,43 @@ export const mockApi: TavshilApi = {
   removeMealDish: (id, itemId) => delay(mockPlan.removeMealDish(id, itemId)),
   moveMealDish: (id, itemId, to) => delay(mockPlan.moveMealDish(id, itemId, to)),
   searchRecipesForMeal: (id) => delay(mockPlan.searchRecipesForMeal(id)),
-  createContactHousehold: async (name) => {
-    const h: Household = { id: `h-new-${households.length}`, name, isOwn: false, people: [] }
+  createContactHousehold: async (name, people = []) => {
+    const id = `h-new-${households.length}`
+    const h: Household = {
+      id,
+      name,
+      isOwn: false,
+      people: people.map((p) => {
+        const personId = nextId('p-new')
+        return {
+          id: personId,
+          name: p.name,
+          householdId: id,
+          isChild: p.isChild,
+          age: p.age,
+          rules: p.rules,
+          constraints: (p.constraints ?? []).map((c) => ({
+            id: nextId('c-new'),
+            personId,
+            tag: c.tag,
+            label: ((t) =>
+              c.tagType === 'allergen'
+                ? `${t[0].toUpperCase()}${t.slice(1)} allergy`
+                : `${t[0].toUpperCase()}${t.slice(1)}`)(c.tag.replace(/_/g, ' ')),
+            tagType: c.tagType,
+            kind: c.kind,
+            severity: c.severity,
+            activeWhen: typeof c.activeWhen === 'string' ? c.activeWhen : 'range',
+            source: 'host' as const,
+            fromProfile: false,
+          })),
+          notes: [],
+          likes: [],
+          dislikes: [],
+          served: [],
+        }
+      }),
+    }
     households.push(h)
     return delay(h)
   },

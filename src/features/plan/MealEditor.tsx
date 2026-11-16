@@ -16,7 +16,7 @@ import { longDate } from '@/lib/dates'
 import { SLOT_LABEL } from '@/lib/plan'
 import { colors, radius, size, space } from '@/theme/tokens'
 
-import { Sheet } from './Sheet'
+import { Sheet } from '@/components/Sheet'
 
 /**
  * Fill a day's meal in place: add dishes from your recipes or by name. The meal is created on the first dish, so opening the

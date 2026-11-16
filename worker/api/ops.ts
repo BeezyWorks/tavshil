@@ -217,6 +217,8 @@ export const operations: Operation[] = [
       spicy: z.enum(['yes', 'no']).nullable().optional(),
       contactHouseholdId: S.id.optional(),
       newContactHousehold: z.string().min(1).max(100).optional(),
+      constraints: z.array(S.constraintInput).max(50).optional(),
+      rules: z.array(z.string()).optional(),
     }),
     run: (c, i) => people.savePerson(c.db, c.actor, i),
   }),
@@ -264,9 +266,27 @@ export const operations: Operation[] = [
     tag: 'People',
     scope: 'write',
     status: 201,
-    summary: 'Create a contact household with no people yet; add its members with POST /people',
-    input: z.object({ name: z.string().min(1).max(100) }),
-    run: (c, i) => people.createContactHousehold(c.db, c.actor, i.name),
+    summary: 'Create a contact household, with its people and their constraints if given',
+    description:
+      'Everything is checked before anything is saved. Add more members later with POST /people (contactHouseholdId).',
+    input: z.object({
+      name: z.string().min(1).max(100),
+      people: z
+        .array(
+          z.object({
+            name: z.string().min(1).max(100),
+            isChild: z.boolean().optional(),
+            birthDate: S.date.nullable().optional(),
+            age: z.number().int().min(0).max(120).nullable().optional(),
+            spicy: z.enum(['yes', 'no']).nullable().optional(),
+            constraints: z.array(S.constraintInput).max(50).optional(),
+            rules: z.array(z.string()).optional(),
+          }),
+        )
+        .max(30)
+        .optional(),
+    }),
+    run: (c, i) => people.createContactHousehold(c.db, c.actor, i.name, i.people),
   }),
   op({
     id: 'deleteContact',

@@ -34,6 +34,7 @@ import type {
   MealRecipeSearch,
   MenuItemInput,
   NewMealInput,
+  NewPerson,
   Occasion,
   PantryList,
   Person,
@@ -125,8 +126,8 @@ export interface TavshilApi {
     mealId: Id,
     query: { q?: string; course?: string; limit?: number },
   ): Promise<MealRecipeSearch>
-  /** A new, empty contact household ("The Roths"); add its members with `addPerson`. */
-  createContactHousehold(name: string): Promise<Household>
+  /** A new contact household ("The Roths"), with its people and their constraints, in one request. */
+  createContactHousehold(name: string, people?: NewPerson[]): Promise<Household>
 
   // Recipes
   searchRecipes(query: string, filters: RecipeFilters): Promise<RecipeSummary[]>
@@ -165,14 +166,9 @@ export interface TavshilApi {
   getPerson(personId: Id): Promise<{ person: Person; household: Household }>
   addPersonNote(personId: Id, note: string): Promise<void>
   /** In your household, in a contact household, or (with `newContactHousehold`) in a new one. */
-  addPerson(input: {
-    name: string
-    isChild?: boolean
-    birthDate?: string
-    age?: number
-    contactHouseholdId?: Id
-    newContactHousehold?: string
-  }): Promise<Person>
+  addPerson(
+    input: NewPerson & { contactHouseholdId?: Id; newContactHousehold?: string },
+  ): Promise<Person>
   /** Set a birthday (exact) or an age (estimated); null clears it. */
   setPersonBirth(personId: Id, input: { birthDate: string | null } | { age: number }): Promise<void>
   /** Whether they can eat spicy food; null goes back to not known. */

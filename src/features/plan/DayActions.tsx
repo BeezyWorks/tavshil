@@ -9,7 +9,7 @@ import { longDate } from '@/lib/dates'
 import { PICKABLE_SLOTS, SLOT_LABEL, wizardHref } from '@/lib/plan'
 import { colors, space } from '@/theme/tokens'
 
-import { Sheet } from './Sheet'
+import { Sheet } from '@/components/Sheet'
 
 /** `6:30` or `18:30` to `HH:MM`; empty or unreadable is no time. */
 function cleanTime(t: string): string | undefined {
