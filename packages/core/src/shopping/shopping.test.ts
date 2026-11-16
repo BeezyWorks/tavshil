@@ -4,6 +4,7 @@ import type { PantryItem } from '../pantry/expiry'
 import type { IngredientLine } from '../units/types'
 import type { PlannedMealItem } from './allocate'
 import { buildShoppingList } from './shopping'
+import { isPantryStaple } from './staples'
 
 const L = (
   o: Partial<IngredientLine> & { ingredientId: string; amount: number | null },
@@ -248,5 +249,99 @@ describe('buildShoppingList', () => {
       })
       expect(l!.covered).toBe(false)
     })
+  })
+})
+
+describe('what each line is for', () => {
+  it('lists the meals and dishes that need a line, with each meal’s own amount', () => {
+    const [l] = buildShoppingList([
+      {
+        ...meal('fri', '2026-11-13', [L({ ingredientId: 'onion', amount: 2 })]),
+        itemId: 'i1',
+        title: 'Brisket',
+      },
+      {
+        ...meal('fri', '2026-11-13', [L({ ingredientId: 'onion', amount: 1 })]),
+        itemId: 'i2',
+        title: 'Salad',
+      },
+      {
+        ...meal('sat', '2026-11-14', [L({ ingredientId: 'onion', amount: 1 })], 2),
+        itemId: 'i3',
+        title: 'Salad',
+      },
+    ])
+    expect(l!.perMeal).toEqual([
+      {
+        mealId: 'fri',
+        mealDate: '2026-11-13',
+        dishes: [
+          { itemId: 'i1', title: 'Brisket' },
+          { itemId: 'i2', title: 'Salad' },
+        ],
+        needed: [{ amount: 3, unit: 'piece', approx: false }],
+        unquantified: false,
+      },
+      {
+        mealId: 'sat',
+        mealDate: '2026-11-14',
+        dishes: [{ itemId: 'i3', title: 'Salad' }],
+        needed: [{ amount: 2, unit: 'piece', approx: false }],
+        unquantified: false,
+      },
+    ])
+    expect(l!.needed[0]!.amount).toBe(5)
+  })
+
+  it('merges weight and volume per meal like the totals, and keeps "to taste" apart', () => {
+    const [l] = buildShoppingList([
+      meal('m1', '2026-11-13', [
+        L({ ingredientId: 'flour', unit: 'g', amount: 100, density: 0.5 }),
+        L({ ingredientId: 'flour', unit: 'ml', amount: 100, density: 0.5 }),
+      ]),
+      meal('m2', '2026-11-14', [L({ ingredientId: 'flour', unit: 'g', amount: null })]),
+    ])
+    expect(l!.perMeal[0]!.needed).toEqual([{ amount: 150, unit: 'g', approx: true }])
+    expect(l!.needed).toEqual(l!.perMeal[0]!.needed)
+    expect(l!.perMeal[1]).toMatchObject({ needed: [], unquantified: true })
+  })
+
+  it('is needed by the earliest meal, or earlier when a dish starts sooner (a thaw)', () => {
+    const lines = buildShoppingList([
+      meal('sat', '2026-11-14', [L({ ingredientId: 'onion', amount: 1 })]),
+      meal('fri', '2026-11-13T19:00', [L({ ingredientId: 'onion', amount: 1 })]),
+      {
+        ...meal('fri', '2026-11-13', [L({ ingredientId: 'brisket', amount: 1 })]),
+        neededBy: '2026-11-12',
+      },
+      // A neededBy later than the meal never moves it later.
+      {
+        ...meal('sun', '2026-11-15', [L({ ingredientId: 'salt', amount: 1 })]),
+        neededBy: '2026-11-20',
+      },
+    ])
+    const by = (id: string) => lines.find((l) => l.ingredientId === id)!.buyBy
+    expect(by('onion')).toBe('2026-11-13')
+    expect(by('brisket')).toBe('2026-11-12')
+    expect(by('salt')).toBe('2026-11-15')
+  })
+})
+
+describe('isPantryStaple', () => {
+  it('knows the obvious staples by name, in any case or with a note', () => {
+    for (const n of [
+      'Salt',
+      'kosher salt',
+      'Olive oil',
+      'sugar',
+      'All-purpose flour',
+      'Baking soda',
+    ])
+      expect(isPantryStaple(n), n).toBe(true)
+    expect(isPantryStaple('ground cumin')).toBe(true)
+    expect(isPantryStaple('Soy sauce')).toBe(true)
+    expect(isPantryStaple('Honey (optional)')).toBe(true)
+    for (const n of ['Brisket', 'Onions', 'Tahini', 'Sesame oil', 'Chicken', 'Butter'])
+      expect(isPantryStaple(n), n).toBe(false)
   })
 })

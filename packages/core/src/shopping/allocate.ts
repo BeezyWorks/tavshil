@@ -13,11 +13,23 @@ export interface PlannedMealItem {
   scale: number
   /** Brought dishes are excluded from shopping and holds. */
   brought?: boolean
+  /** The meal item (dish) this is, and its title, to say what a shopping line is for. */
+  itemId?: string
+  title?: string
+  /**
+   * The date its ingredients are first needed, when earlier than the meal (a thaw or marinade step the day
+   * before). Defaults to the meal's date.
+   */
+  neededBy?: string
 }
 
 export interface Need {
   mealId: string
   mealDate: string
+  itemId?: string
+  title?: string
+  /** YYYY-MM-DD: when it is first needed (`neededBy`, else the meal's date). */
+  neededBy: string
   at: number
   ingredientId: string
   name: string
@@ -64,6 +76,9 @@ function mk(it: PlannedMealItem, at: number, l: IngredientLine, amount: number |
   return {
     mealId: it.mealId,
     mealDate: it.mealDate,
+    ...(it.itemId !== undefined && { itemId: it.itemId }),
+    ...(it.title !== undefined && { title: it.title }),
+    neededBy: earlier(it.neededBy, it.mealDate.slice(0, 10)),
     at,
     ingredientId: l.ingredientId,
     name: l.name,
@@ -73,6 +88,11 @@ function mk(it: PlannedMealItem, at: number, l: IngredientLine, amount: number |
     density: l.density && l.density > 0 ? l.density : null,
     ...(l.category !== undefined && { category: l.category }),
   }
+}
+
+function earlier(a: string | undefined, b: string): string {
+  const x = a?.slice(0, 10)
+  return x && x < b ? x : b
 }
 
 const EPS = 1e-9
