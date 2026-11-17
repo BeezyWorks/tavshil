@@ -68,7 +68,7 @@ export function PlanProvider({
         const tap = tapOf(meal)
         if (tap.kind === 'hosted') return router.push(hostedHref(tap.key) as Href)
         if (tap.kind === 'recipe') return router.push(recipeHref(tap.recipeId, meal) as Href)
-        setSelected({ date: meal.date, slot: meal.slot, meal, change: meal.dishes.length === 0 })
+        setSelected({ date: meal.date, slot: meal.slot, meal, change: !meal.dishes?.length })
       },
       addMeal: (date, slot = 'dinner') => setSelected({ date, slot, meal: null, change: false }),
       openEve: async (eve) => {

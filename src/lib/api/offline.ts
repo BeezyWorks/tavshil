@@ -5,16 +5,17 @@
  */
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import { createAsyncStoragePersister } from '@tanstack/query-async-storage-persister'
-import { QueryClient, type Query } from '@tanstack/react-query'
+import { QueryClient, focusManager, type Query } from '@tanstack/react-query'
 import type { PersistQueryClientProviderProps } from '@tanstack/react-query-persist-client'
 import { useEffect } from 'react'
+import { AppState, Platform } from 'react-native'
 
 import { api } from './client'
 
 const WEEK = 7 * 24 * 60 * 60 * 1000
 
 /** Bump when the shape of cached data changes, so old caches are dropped instead of misread. */
-const CACHE_VERSION = '2'
+const CACHE_VERSION = '3'
 
 export function createQueryClient() {
   return new QueryClient({
@@ -90,4 +91,19 @@ export function useOfflineWarmup(qc: QueryClient, signedIn: boolean) {
   useEffect(() => {
     if (signedIn) void warmOfflineCache(qc)
   }, [qc, signedIn])
+}
+
+/**
+ * Coming back from the background refetches whatever went stale while away. React Query only knows
+ * about tab visibility on the web; on a phone it needs `AppState`. Without this, reopening the app the
+ * next day shows yesterday's `today` and plan until something else triggers a fetch.
+ */
+export function useRefetchOnForeground() {
+  useEffect(() => {
+    if (Platform.OS === 'web') return
+    const sub = AppState.addEventListener('change', (state) => {
+      focusManager.setFocused(state === 'active')
+    })
+    return () => sub.remove()
+  }, [])
 }

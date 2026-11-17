@@ -138,7 +138,7 @@ function useDishes(meal: MealCard): MealDish[] {
         versionId: i.versionId,
       })),
     )
-  return meal.dishes
+  return meal.dishes ?? []
 }
 
 function DishRow({ dish, meal }: { dish: MealDish; meal: MealCard }) {

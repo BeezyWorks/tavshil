@@ -64,14 +64,15 @@ export function hebrewMonthsLabel(first: ISODate, last: ISODate): string {
 
 /** The main dish of a meal (else the first). */
 export function mainDish(meal: MealCard) {
-  return meal.dishes.find((d) => d.course === 'main') ?? meal.dishes[0]
+  const dishes = meal.dishes ?? []
+  return dishes.find((d) => d.course === 'main') ?? dishes[0]
 }
 
 /** `{ lead: 'Shakshuka', more: 2 }`: the main dish and how many others come with it. */
 export function dishSummary(meal: MealCard): { lead: string; more: number } {
   const main = mainDish(meal)
   if (!main) return { lead: meal.summary[0] ?? '', more: 0 }
-  return { lead: main.title, more: meal.dishes.length - 1 }
+  return { lead: main.title, more: (meal.dishes?.length ?? 1) - 1 }
 }
 
 /** The slot's own name: `Dinner`, `Leil Shabbat`, `Lunch`. */
@@ -214,7 +215,7 @@ export type MealTap =
 
 export function tapOf(meal: MealCard): MealTap {
   if (meal.hosted) return { kind: 'hosted', key: meal.hostedKey }
-  if (meal.dishes.length === 1 && meal.dishes[0].recipeId)
+  if (meal.dishes?.length === 1 && meal.dishes[0].recipeId)
     return { kind: 'recipe', recipeId: meal.dishes[0].recipeId }
   return { kind: 'panel' }
 }

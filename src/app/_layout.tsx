@@ -14,7 +14,12 @@ import { refreshAccount, useAccount } from '@/features/account/store'
 import { configureNotifications, useTimerTapRouting } from '@/features/cook/notifications'
 import { AlarmBanner } from '@/features/cook/AlarmBanner'
 import { timerActions, useTimerAlarm } from '@/features/cook/timers'
-import { createQueryClient, persistOptions, useOfflineWarmup } from '@/lib/api/offline'
+import {
+  createQueryClient,
+  persistOptions,
+  useOfflineWarmup,
+  useRefetchOnForeground,
+} from '@/lib/api/offline'
 import { colors } from '@/theme/tokens'
 
 configureNotifications()
@@ -41,6 +46,7 @@ export default function RootLayout() {
   const [client] = useState(createQueryClient)
   const { user, status } = useAccount()
   useOfflineWarmup(client, status === 'signedIn')
+  useRefetchOnForeground()
 
   useEffect(() => {
     void refreshAccount()
