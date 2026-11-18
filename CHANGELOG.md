@@ -1,3 +1,11 @@
+## [3.1.1](https://github.com/BeezyWorks/tavshil/compare/v3.1.0...v3.1.1) (2026-11-18)
+
+
+### Bug Fixes
+
+* **app:** refetch on return from background; tolerate cached meals without dishes ([ee67584](https://github.com/BeezyWorks/tavshil/commit/ee67584172a2002a501f09bcc4f42cb62b382fea))
+* **core:** spoons in metric, fats by weight, convert oven temperatures ([0cb0e9a](https://github.com/BeezyWorks/tavshil/commit/0cb0e9adf5ff6a0d14cdd01bce4d2bc78344f683))
+
 # [3.1.0](https://github.com/BeezyWorks/tavshil/compare/v3.0.0...v3.1.0) (2026-11-16)
 
 
