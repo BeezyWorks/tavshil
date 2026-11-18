@@ -1,4 +1,5 @@
 import {
+  convertTemperatures,
   createDishChecker,
   effectiveFlags,
   formatQuantity,
@@ -270,7 +271,11 @@ export function versionView(v: LoadedVersion, prefs?: DisplayPrefs) {
     cost: x.cost,
     nutrition: x.nutrition,
     prePrep: x.prePrep ?? [],
-    steps: x.steps ?? [],
+    // `display`: the step with temperatures in the reader's units, when that differs from the text.
+    steps: (x.steps ?? []).map((st) => {
+      const display = prefs ? convertTemperatures(st.text, prefs.system) : st.text
+      return display === st.text ? st : { ...st, display }
+    }),
     flags: x.flags ?? {},
     equipment: v.equipment.map((e) => ({ item: e.item, designation: e.designation })),
     tags: v.tags.map((t) => t.tag),

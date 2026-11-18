@@ -21,7 +21,7 @@ import { Checkbox, Segmented, Text, useLayout } from '@/components'
 import { Icon } from '@/components/Icon'
 import { useSaveVersion, useVersion } from '@/lib/api/hooks'
 import { useKeepAwakePref, useMeasure, useUnits } from '@/lib/prefs'
-import { formatAmount, formatClock, portionLabel } from '@/lib/units'
+import { formatAmount, formatClock, portionLabel, stepText } from '@/lib/units'
 import { colors, fontSize, fonts, radius, size, space } from '@/theme/tokens'
 
 import { cookHref } from './notifications'
@@ -254,7 +254,7 @@ export function CookScreen() {
               Step {i + 1} of {total}
               {step.section ? ` · ${step.section}` : ''}
             </Text>
-            <Text style={styles.stepText}>{step.text}</Text>
+            <Text style={styles.stepText}>{stepText(step.text, units)}</Text>
 
             {step.timerSec ? (
               <StepTimer

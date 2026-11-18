@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import { convert, convertCanonical, toCanonical } from './convert'
-import { formatQuantity, roundToFraction } from './display'
+import { convertTemperatures, formatQuantity, roundToFraction } from './display'
 import { parseQuantity } from './parse'
 import type { DisplayPrefs, Quantity } from './types'
 
@@ -148,8 +148,24 @@ describe('formatQuantity', () => {
   it('formats metric volumes', () => {
     expect(formatQuantity(ml(237), metric).text).toBe('235 ml')
     expect(formatQuantity(ml(1500), metric).text).toBe('1.5 l')
-    expect(formatQuantity(ml(7.3), metric).text).toBe('7 ml')
-    expect(formatQuantity(ml(1.2), metric).text).toBe('1 ml')
+    expect(formatQuantity(ml(60), metric).text).toBe('60 ml')
+  })
+  it('uses spoons for small metric volumes', () => {
+    expect(formatQuantity(tsp(3), metric).text).toBe('1 tbsp')
+    expect(formatQuantity(ml(15), metric).text).toBe('1 tbsp')
+    expect(formatQuantity(ml(7.3), metric).text).toBe('1½ tsp')
+    expect(formatQuantity(ml(1.2), metric).text).toBe('¼ tsp')
+    expect(formatQuantity(tsp(9), metric).text).toBe('3 tbsp')
+  })
+  it('shows fats in grams or spoons, never ml', () => {
+    expect(formatQuantity(tsp(6), metric, { category: 'fat' }).text).toBe('2 tbsp')
+    expect(formatQuantity(tsp(24), metric, { category: 'fat' }).text).toBe('~115 g')
+    expect(formatQuantity(tsp(24), metric, { category: 'fat', density: 0.96 }).text).toBe('~115 g')
+    expect(formatQuantity(g(100), metric, { category: 'fat' }).text).toBe('100 g')
+    expect(formatQuantity(tsp(24), us, { category: 'fat' }).text).toBe('½ cup')
+    // an explicit override wins
+    const vol: DisplayPrefs = { system: 'metric', overrides: { fat: { dimension: 'volume' } } }
+    expect(formatQuantity(tsp(24), vol, { category: 'fat' }).text).toBe('120 ml')
   })
   it('formats grams in whole or 5 g steps', () => {
     expect(formatQuantity(g(203), metric).text).toBe('205 g')
@@ -188,5 +204,27 @@ describe('formatQuantity', () => {
     expect(formatQuantity(ml(236.588), prefs, { category: 'flour' }).text).toBe('235 ml')
     // other categories use the global system
     expect(formatQuantity(ml(236.588), prefs, { category: 'oil' }).text).toBe('1 cup')
+  })
+})
+
+describe('convertTemperatures', () => {
+  it('converts Fahrenheit to Celsius for metric', () => {
+    expect(convertTemperatures('Heat the oven to 350°F.', 'metric')).toBe('Heat the oven to 175°C.')
+    expect(convertTemperatures('Bake at 425 °F', 'metric')).toBe('Bake at 220°C')
+    expect(convertTemperatures('roast at 400 degrees F for 1 hour', 'metric')).toBe(
+      'roast at 205°C for 1 hour',
+    )
+    expect(convertTemperatures('325-350°F', 'metric')).toBe('165–175°C')
+  })
+  it('converts Celsius to Fahrenheit for US, rounded to oven settings', () => {
+    expect(convertTemperatures('Heat the oven to 180°C.', 'us')).toBe('Heat the oven to 350°F.')
+    expect(convertTemperatures('braise at 160°C', 'us')).toBe('braise at 325°F')
+    expect(convertTemperatures('chill to 4°C', 'us')).toBe('chill to 40°F')
+  })
+  it('leaves text already in the system alone', () => {
+    expect(convertTemperatures('Bake at 180°C', 'metric')).toBe('Bake at 180°C')
+    expect(convertTemperatures('Cook 350 degrees for an hour', 'metric')).toBe(
+      'Cook 350 degrees for an hour',
+    )
   })
 })

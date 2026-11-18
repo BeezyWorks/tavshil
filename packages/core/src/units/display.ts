@@ -63,10 +63,25 @@ function fmtMetricWeight(g: number, approx: boolean): FormattedQuantity {
   return make(`${trimNumber(r, 1)} g`, r, 'g', approx)
 }
 
+/** Teaspoons and tablespoons, used in metric kitchens too. Null at 4 tbsp (¼ cup, 60 ml) and above. */
+function fmtSpoons(ml: number, approx: boolean): FormattedQuantity | null {
+  const tsp = ml / ML_PER_TSP
+  if (tsp < 3) {
+    const f = roundToFraction(tsp)
+    if (f.value === 0) return make('a pinch', 0, 'pinch', approx)
+    if (f.value < 3) return make(`${f.text} tsp`, f.value, 'tsp', approx)
+  }
+  if (tsp < 12) {
+    const f = roundToFraction(tsp / 3)
+    if (f.value < 4) return make(`${f.text} tbsp`, f.value, 'tbsp', approx)
+  }
+  return null
+}
+
 function fmtMetricVolume(ml: number, approx: boolean): FormattedQuantity {
-  let r: number
-  if (ml < 20) r = ml < 5 ? Math.round(ml * 2) / 2 : Math.round(ml)
-  else r = Math.round(ml / 5) * 5
+  const spoons = fmtSpoons(ml, approx)
+  if (spoons) return spoons
+  const r = Math.round(ml / 5) * 5
   if (r >= 1000) {
     const l = Math.round((ml / 1000) * 100) / 100
     return make(`${trimNumber(l, 2)} l`, l, 'l', approx)
@@ -87,16 +102,9 @@ function fmtUsWeight(g: number, approx: boolean): FormattedQuantity {
 }
 
 function fmtUsVolume(ml: number, approx: boolean): FormattedQuantity {
+  const spoons = fmtSpoons(ml, approx)
+  if (spoons) return spoons
   const tsp = ml / ML_PER_TSP
-  if (tsp < 3) {
-    const f = roundToFraction(tsp)
-    if (f.value === 0) return make('a pinch', 0, 'pinch', approx)
-    if (f.value < 3) return make(`${f.text} tsp`, f.value, 'tsp', approx)
-  }
-  if (tsp < 12) {
-    const f = roundToFraction(tsp / 3)
-    if (f.value < 4) return make(`${f.text} tbsp`, f.value, 'tbsp', approx)
-  }
   const cups = tsp / 48
   if (cups >= 4) {
     const q = cups / 4
@@ -125,9 +133,16 @@ export function formatInSystem(q: Quantity, system: UnitSystem): FormattedQuanti
 }
 
 /**
+ * Solid fats (butter, margarine) are measured by weight or by the spoon, never in ml. g/ml when the catalog has
+ * none: the kitchen convention for butter (1 cup = 227 g, a stick = 113 g).
+ */
+const FAT_DENSITY = 0.959
+
+/**
  * Format a quantity for display per the user's preference: a system plus per-category overrides
  * (flour/sugar in grams, liquids in cups). `density` (g/ml) lets an override show weight as volume or vice
- * versa; such results are marked approximate ("~").
+ * versa; such results are marked approximate ("~"). Without an override, the `fat` category shows metric
+ * volumes of ¼ cup and more in grams.
  */
 export function formatQuantity(
   q: Quantity,
@@ -142,6 +157,36 @@ export function formatQuantity(
       cur = { amount: q.amount * opts.density, unit: 'g', approx: true }
     else if (ov.dimension === 'volume' && q.unit === 'g')
       cur = { amount: q.amount / opts.density, unit: 'ml', approx: true }
+  } else if (
+    !ov?.dimension &&
+    opts.category === 'fat' &&
+    system === 'metric' &&
+    q.unit === 'ml' &&
+    !fmtSpoons(q.amount, q.approx)
+  ) {
+    const density = opts.density && opts.density > 0 ? opts.density : FAT_DENSITY
+    cur = { amount: q.amount * density, unit: 'g', approx: true }
   }
   return formatInSystem(cur, system)
+}
+
+const TEMP_RE =
+  /(-?\d+(?:\.\d+)?)(?:\s*(?:-|–|to)\s*(\d+(?:\.\d+)?))?(?:\s*°\s*|\s*degrees?\s+)(C|F|Celsius|Fahrenheit)\b/gi
+
+/**
+ * Rewrite oven and oil temperatures in free text ("350°F", "175-180 °C", "400 degrees F") into the given system. Celsius is
+ * rounded to 5 degrees, Fahrenheit to 25 above 200 °F (oven dials) and to 5 below.
+ */
+export function convertTemperatures(text: string, system: UnitSystem): string {
+  const target = system === 'metric' ? 'C' : 'F'
+  const conv = (n: number) => {
+    if (target === 'C') return Math.round(((n - 32) * 5) / 9 / 5) * 5
+    const f = (n * 9) / 5 + 32
+    return f > 200 ? Math.round(f / 25) * 25 : Math.round(f / 5) * 5
+  }
+  return text.replace(TEMP_RE, (m, a: string, b: string | undefined, unit: string) => {
+    if (unit[0]!.toUpperCase() === target) return m
+    const lo = conv(Number(a))
+    return `${lo}${b !== undefined ? `–${conv(Number(b))}` : ''}°${target}`
+  })
 }

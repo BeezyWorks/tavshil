@@ -1,4 +1,6 @@
-/** Display-only unit conversion for the mock UI. The real conversion lives in @tavshil/core. */
+/** Display formatting for the app. Amounts are formatted by @tavshil/core, the same as the API and the AI see. */
+import { convertTemperatures, displayCategory, formatQuantity } from '@tavshil/core/src/units'
+
 import type { IngredientLine } from '@/lib/api/types'
 
 export type UnitSystem = 'metric' | 'us'
@@ -24,37 +26,19 @@ export function fraction(n: number): string {
   return `${whole || ''}${best[1]}`.trim() || '0'
 }
 
-function roundG(g: number): string {
-  if (g >= 100) return String(Math.round(g / 5) * 5)
-  return String(Math.round(g))
-}
-
 /**
  * What to show amounts as: `weight` (g, oz), `volume` (ml, cups) or `auto` (the usual kitchen choice: liquids by
  * volume; metric dry goods by weight; US dry goods in cups when a density is known, else ounces).
  */
 export type Measure = 'auto' | 'weight' | 'volume'
 
-function metricAmount(unit: 'g' | 'ml', a: number): string {
-  if (unit === 'g') return a >= 1000 ? `${(a / 1000).toFixed(1)} kg` : `${roundG(a)} g`
-  return a >= 1000 ? `${(a / 1000).toFixed(1)} l` : `${Math.round(a)} ml`
-}
-
-function usVolume(ml: number): string {
-  if (ml >= 60) return `${fraction(ml / 240)} cup${ml / 240 > 1.05 ? 's' : ''}`
-  if (ml >= 14) return `${fraction(ml / 15)} tbsp`
-  return `${fraction(ml / 5)} tsp`
-}
-
-function usWeight(g: number): string {
-  const oz = g / 28.35
-  return oz >= 16 ? `${(oz / 16).toFixed(1)} lb` : `${fraction(oz)} oz`
-}
-
-/** Format one ingredient line for display. Returns text and whether it is approximate. */
+/**
+ * Format one ingredient line for display. Returns text (without the "~") and whether it is approximate. In `auto`
+ * the name picks kitchen habits from core: butter and other solid fats in grams or spoons, never ml.
+ */
 export function formatAmount(
   line: Pick<IngredientLine, 'amount' | 'unit' | 'density'> &
-    Partial<Pick<IngredientLine, 'unquantified' | 'original'>>,
+    Partial<Pick<IngredientLine, 'unquantified' | 'original' | 'name'>>,
   scale: number,
   system: UnitSystem,
   measure: Measure = 'auto',
@@ -74,11 +58,18 @@ export function formatAmount(
   }
   let amount = a
   if (unit !== line.unit) amount = unit === 'ml' ? a / d! : a * d!
-  const approx = unit !== line.unit
 
-  if (system === 'metric') return { text: metricAmount(unit, amount), approx }
-  return { text: unit === 'ml' ? usVolume(amount) : usWeight(amount), approx }
+  const category = measure === 'auto' && line.name ? displayCategory(line.name) : undefined
+  const f = formatQuantity(
+    { amount, unit, approx: unit !== line.unit },
+    { system },
+    { category, density: d },
+  )
+  return { text: f.text.replace(/^~/, ''), approx: f.approx }
 }
+
+/** A step's text with oven temperatures in the reader's units. */
+export const stepText = (text: string, system: UnitSystem) => convertTemperatures(text, system)
 
 export const SHARES: [number, string][] = [
   [0.125, '⅛'],

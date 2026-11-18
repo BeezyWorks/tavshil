@@ -30,7 +30,7 @@ import type { Fit, RecipeVersion, SkipImpact } from '@/lib/api/types'
 import { useMeasure, useUnits } from '@/lib/prefs'
 import { groupBySection, headingFor } from '@/lib/sections'
 import { COURSE_LABEL } from '@/lib/strings'
-import { formatAmount, portionLabel } from '@/lib/units'
+import { formatAmount, stepText, portionLabel } from '@/lib/units'
 import { colors, space, type Tone } from '@/theme/tokens'
 
 const isVideo = (u: string) =>
@@ -551,7 +551,7 @@ function VersionView({
                       </Text>
                     </View>
                     <View style={{ flex: 1, gap: 4 }}>
-                      <Text>{s.text}</Text>
+                      <Text>{stepText(s.text, units)}</Text>
                       {s.ingredientIds.length ? (
                         <Text variant="small" color={colors.muted}>
                           Uses:{' '}

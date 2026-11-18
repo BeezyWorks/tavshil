@@ -3,6 +3,7 @@ import {
   PERIOD_NAMES,
   PERSON_RULES,
   SOURCING_STANDARDS,
+  displayCategory,
   type ActiveWhen as CoreActiveWhen,
   type Constraint,
   type ConstraintTag,
@@ -221,18 +222,7 @@ export function broughtToDish(item: typeof s.mealItems.$inferSelect): DishVersio
   }
 }
 
-// Ingredient display categories (flour, sugar, liquid, ...) for per-category unit overrides, from the name.
-const DISPLAY_CATEGORIES: [string, RegExp][] = [
-  ['flour', /\b(flour|matzo? meal|matzah meal|cake meal|semolina|cornstarch|starch)\b/i],
-  ['sugar', /\b(sugar|honey|syrup|molasses|stevia)\b/i],
-  ['liquid', /\b(milk|water|oil|juice|wine|broth|stock|cream|vinegar|sauce|coffee|tea|seltzer)\b/i],
-  [
-    'spice',
-    /\b(salt|pepper|cumin|paprika|cinnamon|turmeric|oregano|spice|garlic powder|za'?atar|nutmeg)\b/i,
-  ],
-]
-export const displayCategory = (name: string): string | undefined =>
-  DISPLAY_CATEGORIES.find(([, re]) => re.test(name))?.[0]
+export { displayCategory }
 
 // The catalog has no "non-linear when scaled" field, so scaling warnings are keyed off the name (an adapter; core
 // takes the hint as data).
