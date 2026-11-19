@@ -28,7 +28,41 @@
       ],
       "expo-audio",
       "expo-secure-store",
-      "expo-widgets"
+      [
+        "expo-widgets",
+        {
+          "widgets": [
+            {
+              "name": "TavshilWidget",
+              "displayName": "Tavshil",
+              "description": "What's cooking next, the shopping list, today's prep and this week.",
+              "supportedFamilies": ["systemSmall", "systemMedium", "systemLarge"],
+              "contentMarginsDisabled": false,
+              "ios": {
+                "supportedFamilies": ["systemSmall", "systemMedium", "systemLarge"],
+                "configuration": {
+                  "title": "Show",
+                  "description": "Choose what the widget shows.",
+                  "parameters": {
+                    "view": {
+                      "title": "Show",
+                      "type": "enum",
+                      "default": "next",
+                      "values": [
+                        { "name": "Cooking next", "value": "next" },
+                        { "name": "Shopping list", "value": "shopping" },
+                        { "name": "Prep today", "value": "prep" },
+                        { "name": "This week", "value": "week" },
+                        { "name": "Everything (medium and large)", "value": "all" }
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          ]
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true,
