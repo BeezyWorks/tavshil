@@ -1,3 +1,10 @@
+# [3.2.0](https://github.com/BeezyWorks/tavshil/compare/v3.1.1...v3.2.0) (2026-11-19)
+
+
+### Features
+
+* **app:** home-screen widget for next meal, shopping, today's prep and the week ([5f7b9a6](https://github.com/BeezyWorks/tavshil/commit/5f7b9a6be7d304129751e0720466d222aeca729d))
+
 ## [3.1.1](https://github.com/BeezyWorks/tavshil/compare/v3.1.0...v3.1.1) (2026-11-18)
 
 
