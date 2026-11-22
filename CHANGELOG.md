@@ -1,3 +1,10 @@
+## [3.2.1](https://github.com/BeezyWorks/tavshil/compare/v3.2.0...v3.2.1) (2026-11-22)
+
+
+### Bug Fixes
+
+* **ios:** adopt the UIScene lifecycle so iOS 27 doesn't trap at launch ([60f0081](https://github.com/BeezyWorks/tavshil/commit/60f008127720afa7c79afc803d72a693351bee8f))
+
 # [3.2.0](https://github.com/BeezyWorks/tavshil/compare/v3.1.1...v3.2.0) (2026-11-19)
 
 
