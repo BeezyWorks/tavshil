@@ -1092,7 +1092,23 @@ export function adaptPrepTask(t: ServerPrepTask, mealName?: string): PrepTask {
   }
 }
 
+/** The step a wait task belongs to: `<meal>:<dish>:cook-wait` is the wait after `<meal>:<dish>:cook`. */
+const waitParentKey = (key: string): string | null => {
+  if (key.endsWith(':cook-wait')) return key.replace(/:cook-wait$/, ':cook')
+  const m = key.match(/^(.*):pre-wait:(.*)$/)
+  return m ? `${m[1]}:pre:${m[2]}` : null
+}
+
 export function adaptPrep(days: ServerPrepDay[]): PrepDay[] {
+  // Each step comes as the hands-on task and a passive wait after it. Listed apart they read as every step
+  // twice, so the wait is folded into its step ("Passive · until 7:00 pm").
+  const keys = new Set(days.flatMap((d) => d.tasks.map((t) => t.key)))
+  const waits = new Map<string, ServerPrepTask>()
+  for (const d of days)
+    for (const t of d.tasks) {
+      const parent = waitParentKey(t.key)
+      if (parent && keys.has(parent)) waits.set(parent, t)
+    }
   return days.map((d) => {
     const mealName = (id: string) => d.meals.find((m) => m.mealId === id)?.label ?? ''
     return {
@@ -1100,7 +1116,16 @@ export function adaptPrep(days: ServerPrepDay[]): PrepDay[] {
       label: weekdayName(d.date),
       date: d.date,
       ...(d.hebrew && { hebrew: shortHebrew(d.hebrew) }),
-      tasks: d.tasks.map((t) => adaptPrepTask(t, mealName(t.mealId))),
+      tasks: d.tasks
+        .filter((t) => {
+          const parent = waitParentKey(t.key)
+          return !(parent && waits.get(parent) === t)
+        })
+        .map((t) => {
+          const task = adaptPrepTask(t, mealName(t.mealId))
+          const wait = waits.get(t.key)
+          return wait?.endText ? { ...task, waitUntil: clock12(wait.endText) } : task
+        }),
       meals: d.meals.map((m) => ({
         mealId: m.mealId,
         name: m.label,

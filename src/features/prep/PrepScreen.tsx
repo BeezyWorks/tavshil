@@ -291,11 +291,15 @@ function TaskRow({
         <Text variant="bodyStrong" style={t.done && styles.done}>
           {t.text}
         </Text>
-        {sub.length || t.passive || cook ? (
+        {sub.length || t.passive || t.waitUntil || cook ? (
           <View style={styles.subRow}>
-            {t.passive ? (
+            {t.passive || t.waitUntil ? (
               <Text variant="small" color={colors.accent} style={styles.passive}>
-                {t.endTime ? PREP.sitsUntil(lowerTime(t.endTime)) : PREP.passive}
+                {t.waitUntil
+                  ? PREP.sitsUntil(lowerTime(t.waitUntil))
+                  : t.endTime
+                    ? PREP.sitsUntil(lowerTime(t.endTime))
+                    : PREP.passive}
               </Text>
             ) : null}
             {sub.length ? <Text variant="small">{sub.join(' · ')}</Text> : null}

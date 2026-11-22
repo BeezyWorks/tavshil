@@ -530,6 +530,8 @@ export interface PrepTask {
   dish: string
   kind: 'active' | 'passive' | 'setup'
   passive?: boolean
+  /** The unattended time after this step (baking, marinating) ends then, e.g. `7:00 PM`. */
+  waitUntil?: string
   /** Minutes since midnight on the task's day, for scheduling reminders. */
   startMin?: number
   /** Minutes since midnight on `endDate` (or the task's day). */
