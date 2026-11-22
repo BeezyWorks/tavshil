@@ -12,6 +12,7 @@
       "favicon": "./assets/brand/favicon.png"
     },
     "plugins": [
+      "./plugins/with-scene-lifecycle",
       "expo-router",
       "expo-font",
       [
