@@ -1,3 +1,10 @@
+## [3.2.2](https://github.com/BeezyWorks/tavshil/compare/v3.2.1...v3.2.2) (2026-11-24)
+
+
+### Bug Fixes
+
+* **app:** fold passive prep waits into their step ([048b09f](https://github.com/BeezyWorks/tavshil/commit/048b09f1c990ace716d18262016b88f27ce33f7b))
+
 ## [3.2.1](https://github.com/BeezyWorks/tavshil/compare/v3.2.0...v3.2.1) (2026-11-22)
 
 
