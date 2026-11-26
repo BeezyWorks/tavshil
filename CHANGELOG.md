@@ -1,3 +1,11 @@
+## [3.3.1](https://github.com/BeezyWorks/tavshil/compare/v3.3.0...v3.3.1) (2026-11-26)
+
+
+### Bug Fixes
+
+* **app:** recipes opened from the plan go back to the plan ([31e0336](https://github.com/BeezyWorks/tavshil/commit/31e033623fc6788bcea6830ef477961828539cfb))
+* **app:** widget fits its prep list and its meal card opens the meal ([e358342](https://github.com/BeezyWorks/tavshil/commit/e358342155d6206ee1d7f1a8cec43f14877b5556))
+
 # [3.3.0](https://github.com/BeezyWorks/tavshil/compare/v3.2.2...v3.3.0) (2026-11-26)
 
 
