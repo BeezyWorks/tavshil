@@ -1,131 +1,193 @@
-import { HStack, Spacer, Text, VStack } from '@expo/ui/swift-ui'
-import { font, foregroundStyle, lineLimit, padding } from '@expo/ui/swift-ui/modifiers'
+import { HStack, Image, Link, Spacer, Text, VStack } from '@expo/ui/swift-ui'
+import {
+  background,
+  font,
+  foregroundStyle,
+  frame,
+  lineLimit,
+  monospacedDigit,
+  padding,
+  shapes,
+  strikethrough,
+  widgetURL,
+} from '@expo/ui/swift-ui/modifiers'
 import { createWidget, type WidgetEnvironment } from 'expo-widgets'
 
 import type { WidgetSnapshot } from './model'
 
-/** Which card a widget instance shows; chosen when the widget is added or edited. */
-export interface TavshilWidgetConfig {
-  view: 'next' | 'shopping' | 'prep' | 'week' | 'all'
-}
-
 /**
  * Runs in the widget runtime: no hooks, and nothing from module scope. Everything it needs is
  * declared inside the function or arrives in props (see `WidgetSnapshot`).
+ *
+ * Small: what you cook next, tap to cook. Medium: that card with a Cook button, and the next few prep tasks.
+ * Large: the card and the rest of today's prep.
  */
-const TavshilWidget = (
-  props: WidgetSnapshot,
-  environment: WidgetEnvironment<TavshilWidgetConfig>,
-) => {
+const TavshilWidget = (props: WidgetSnapshot, environment: WidgetEnvironment) => {
   'widget'
-  const accent = environment.widgetRenderingMode === 'fullColor' ? '#2E6A4E' : undefined
+  const color = environment.widgetRenderingMode === 'fullColor'
+  const dark = environment.colorScheme === 'dark'
+  const accent = color ? (dark ? '#7FC29E' : '#2E6A4E') : '#FFFFFF'
+  const onAccent = dark ? '#0F1A14' : '#FFFFFF'
+  const cardFill = color ? (dark ? '#1C2B23' : '#E7F0EA') : 'rgba(255,255,255,0.12)'
+  const muted = { type: 'hierarchical', style: 'secondary' } as const
   const family = environment.widgetFamily
-  const big = family === 'systemLarge' || family === 'systemExtraLarge'
   const small = family === 'systemSmall'
-  const view = environment.configuration?.view ?? 'next'
+  const big = family === 'systemLarge' || family === 'systemExtraLarge'
 
-  const heading = (text: string) => (
-    <Text modifiers={[font({ weight: 'bold', size: 12 }), foregroundStyle(accent ?? '#FFFFFF')]}>
-      {text.toUpperCase()}
-    </Text>
+  const next = props.next
+  const tasks = props.prep.tasks
+  const left = props.prep.left
+
+  const cookButton = (url: string) => (
+    <Link destination={url}>
+      <HStack
+        spacing={5}
+        modifiers={[padding({ horizontal: 14, vertical: 9 }), background(accent, shapes.capsule())]}
+      >
+        <Image systemName="play.fill" size={11} color={onAccent} />
+        <Text modifiers={[font({ weight: 'semibold', size: 15 }), foregroundStyle(onAccent)]}>
+          Cook
+        </Text>
+      </HStack>
+    </Link>
   )
-  const line = (text: string, key: string, dim = false) => (
-    <Text
-      key={key}
-      modifiers={[font({ size: 13 }), lineLimit(1), ...(dim ? [foregroundStyle('#8A8A85')] : [])]}
+
+  const card = (
+    <HStack
+      alignment="center"
+      spacing={10}
+      modifiers={[
+        padding({ horizontal: 12, vertical: 10 }),
+        background(cardFill, shapes.roundedRectangle({ cornerRadius: 14 })),
+      ]}
     >
-      {text}
-    </Text>
-  )
-  const empty = (text: string) => (
-    <Text modifiers={[font({ size: 13 }), foregroundStyle('#8A8A85')]}>{text}</Text>
-  )
-
-  const next = () => (
-    <VStack alignment="leading" spacing={3}>
-      {heading(props.next?.title ?? 'Cooking next')}
-      {props.next ? (
-        <>
-          {props.next.when ? line(props.next.when, 'when', true) : null}
-          {props.next.dishes.slice(0, small ? 3 : big ? 6 : 4).map((d, i) => line(d, `d${i}`))}
-          {props.next.more > 0 && !small ? line(`+${props.next.more} more`, 'more', true) : null}
-        </>
-      ) : (
-        empty('Nothing planned yet')
-      )}
-    </VStack>
-  )
-
-  const shopping = () => (
-    <VStack alignment="leading" spacing={3}>
-      {heading(props.shopping.count ? `To buy · ${props.shopping.count}` : 'To buy')}
-      {props.shopping.count === 0
-        ? empty('Nothing left to buy')
-        : props.shopping.items.slice(0, small ? 4 : big ? 8 : 5).map((n, i) => line(n, `s${i}`))}
-    </VStack>
+      <VStack alignment="leading" spacing={2}>
+        <Text
+          modifiers={[
+            font({ weight: 'semibold', size: 12 }),
+            foregroundStyle(accent),
+            lineLimit(1),
+          ]}
+        >
+          {next ? next.kicker : 'Cooking next'}
+        </Text>
+        <Text
+          modifiers={[
+            font({ weight: 'bold', size: small ? 17 : 19, design: 'rounded' }),
+            lineLimit(small ? 3 : 2),
+          ]}
+        >
+          {next ? next.title : 'Nothing planned'}
+        </Text>
+        {next?.sub ? (
+          <Text modifiers={[font({ size: 12 }), foregroundStyle(muted), lineLimit(1)]}>
+            {next.sub}
+          </Text>
+        ) : null}
+      </VStack>
+      <Spacer />
+      {!small && next?.cookUrl ? cookButton(next.cookUrl) : null}
+    </HStack>
   )
 
-  const prep = () => (
-    <VStack alignment="leading" spacing={3}>
-      {heading(props.prep.left ? `Prep today · ${props.prep.left} left` : 'Prep today')}
-      {props.prep.tasks.length === 0
-        ? empty('No prep today')
-        : props.prep.left === 0
-          ? empty('All done')
-          : props.prep.tasks
-              .filter((t) => !t.done)
-              .slice(0, small ? 3 : big ? 7 : 4)
-              .map((t, i) => line(`${t.time.replace(/\s*(AM|PM)$/i, '')}  ${t.text}`, `p${i}`))}
-    </VStack>
+  const task = (t: WidgetSnapshot['prep']['tasks'][number], i: number) => (
+    <HStack key={`t${i}`} alignment="center" spacing={8}>
+      <Image
+        systemName={t.done ? 'checkmark.circle.fill' : 'circle'}
+        size={16}
+        color={t.done ? accent : '#9A948A'}
+      />
+      <Text
+        modifiers={[
+          font({ weight: t.done ? 'regular' : 'semibold', size: 13 }),
+          monospacedDigit(),
+          foregroundStyle(t.done ? muted : accent),
+          frame({ width: 58, alignment: 'leading' }),
+        ]}
+      >
+        {t.time}
+      </Text>
+      <VStack alignment="leading" spacing={0}>
+        <Text
+          modifiers={[
+            font({ weight: 'medium', size: 14 }),
+            lineLimit(1),
+            ...(t.done
+              ? [foregroundStyle(muted), strikethrough({ isActive: true, pattern: 'solid' })]
+              : []),
+          ]}
+        >
+          {t.text}
+        </Text>
+        {big && t.sub ? (
+          <Text modifiers={[font({ size: 11 }), foregroundStyle(muted), lineLimit(1)]}>
+            {t.sub}
+          </Text>
+        ) : null}
+      </VStack>
+      <Spacer />
+      {t.cookUrl && !t.done ? (
+        <Link destination={t.cookUrl}>
+          <Image systemName="play.circle.fill" size={20} color={accent} />
+        </Link>
+      ) : null}
+    </HStack>
   )
 
-  const week = () => (
-    <VStack alignment="leading" spacing={3}>
-      {heading('This week')}
-      {props.week.length === 0
-        ? empty('No plan loaded')
-        : props.week
-            .slice(0, small ? 4 : 7)
-            .map((d, i) =>
-              line(
-                `${d.today ? '› ' : ''}${d.label}  ${
-                  [d.note, d.meals.join(', ')].filter(Boolean).join(' · ') || '–'
-                }`,
-                `w${i}`,
-                !d.today,
-              ),
-            )}
-    </VStack>
-  )
-
-  const card = (v: TavshilWidgetConfig['view']) =>
-    v === 'shopping' ? shopping() : v === 'prep' ? prep() : v === 'week' ? week() : next()
-
-  const body =
-    view === 'all' && (big || family === 'systemMedium') ? (
-      big ? (
-        <VStack alignment="leading" spacing={10}>
-          {next()}
-          {prep()}
-          {shopping()}
-          {week()}
-        </VStack>
-      ) : (
-        <HStack alignment="top" spacing={12}>
-          {next()}
-          {prep()}
+  const prepList = () => {
+    const rows = big ? 7 : 2
+    const shown = tasks.slice(0, rows)
+    const more = tasks.length - shown.length
+    return (
+      <VStack alignment="leading" spacing={big ? 9 : 6}>
+        <HStack>
+          <Text modifiers={[font({ weight: 'bold', size: 12 }), foregroundStyle(muted)]}>
+            {left ? `PREP TODAY · ${left} LEFT` : 'PREP TODAY'}
+          </Text>
+          <Spacer />
+          {more > 0 ? (
+            <Text modifiers={[font({ size: 12 }), foregroundStyle(muted)]}>{`+${more} more`}</Text>
+          ) : null}
         </HStack>
-      )
-    ) : (
-      card(view === 'all' ? 'next' : view)
+        {tasks.length === 0 ? (
+          <Text modifiers={[font({ size: 13 }), foregroundStyle(muted)]}>
+            Nothing to prep today
+          </Text>
+        ) : left === 0 && !big ? (
+          <Text modifiers={[font({ size: 13 }), foregroundStyle(muted)]}>All done for today</Text>
+        ) : (
+          shown.map(task)
+        )}
+      </VStack>
+    )
+  }
+
+  if (small)
+    return (
+      <VStack
+        alignment="leading"
+        spacing={8}
+        modifiers={[widgetURL(next?.cookUrl ?? 'tavshil://?show=todo')]}
+      >
+        {card}
+        <Spacer />
+        <Text modifiers={[font({ weight: 'semibold', size: 12 }), foregroundStyle(muted)]}>
+          {tasks.length === 0 ? 'No prep today' : left ? `${left} prep left today` : 'Prep done'}
+        </Text>
+      </VStack>
     )
 
   return (
-    <VStack alignment="leading" modifiers={[padding({ all: 12 })]}>
-      {body}
+    <VStack
+      alignment="leading"
+      spacing={big ? 14 : 10}
+      modifiers={[widgetURL('tavshil://?show=todo')]}
+    >
+      {card}
+      {prepList()}
       <Spacer />
     </VStack>
   )
 }
 
-export default createWidget<WidgetSnapshot, TavshilWidgetConfig>('TavshilWidget', TavshilWidget)
+export default createWidget<WidgetSnapshot>('TavshilWidget', TavshilWidget)

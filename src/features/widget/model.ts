@@ -1,33 +1,42 @@
-import { holyMeals, mealTitle, toBuy } from '@/features/plan/model'
-import type { ISODate, MealCard, PlanView, PrepDay, ShoppingLine } from '@/lib/api/types'
-import { clockMinutes, weekdayName } from '@/lib/dates'
+import { clockShort, holyMeals, mainDish, mealTitle, startTime } from '@/features/plan/model'
+import { lowerTime, mergeDays } from '@/features/prep/model'
+import type { ISODate, MealCard, PlanView, PrepDay } from '@/lib/api/types'
+import { clock12 } from '@/lib/dates'
+import { PREP } from '@/lib/strings'
 
-/** Everything the home-screen widget draws. Plain JSON: it is handed to the widget runtime as props. */
+/** Deep link into cooking mode (`scheme: tavshil`). */
+const cookUrl = (versionId: string | undefined | null) =>
+  versionId ? `tavshil://cook/${versionId}` : null
+
+/**
+ * Everything the home-screen widget draws: the meal you cook next with a Cook button (the card above the week), and
+ * today's prep list (the side panel on the plan). Plain JSON: it is handed to the widget runtime as props.
+ */
 export interface WidgetSnapshot {
   /** Epoch ms the snapshot was built. */
   updatedAt: number
-  /** The next meal you are hosting, e.g. `Tonight’s dinner`, with when and what. */
-  next: { title: string; when: string; dishes: string[]; more: number } | null
-  shopping: { count: number; items: string[] }
+  /** The next meal you are hosting with dishes. */
+  next: {
+    /** `Tonight’s dinner · 7:00` */
+    kicker: string
+    /** The main dish, else the meal's name. */
+    title: string
+    /** `Start at 4:30 · 6 people` */
+    sub: string
+    /** Cooking mode for the main dish; null when it has no recipe. */
+    cookUrl: string | null
+  } | null
   /** Today's prep, time order. `left` counts the ones not ticked off. */
-  prep: { tasks: { time: string; text: string; done: boolean }[]; left: number }
-  /** Seven days of the current week. */
-  week: { label: string; today: boolean; note: string; meals: string[] }[]
+  prep: {
+    tasks: { time: string; text: string; sub: string; done: boolean; cookUrl: string | null }[]
+    left: number
+  }
 }
 
 export const EMPTY_SNAPSHOT: WidgetSnapshot = {
   updatedAt: 0,
   next: null,
-  shopping: { count: 0, items: [] },
   prep: { tasks: [], left: 0 },
-  week: [],
-}
-
-/** `4:30 PM`-style text for a meal's 24-hour `HH:MM`. */
-function timeText(hhmm: string | null): string {
-  if (!hhmm) return ''
-  const [h, m] = hhmm.split(':').map(Number)
-  return `${((h + 11) % 12) + 1}:${String(m).padStart(2, '0')} ${h < 12 ? 'am' : 'pm'}`
 }
 
 /** Every meal of the week, in order, that we host and have something planned for. */
@@ -56,8 +65,6 @@ export function nextMeal(view: PlanView, nowMin: number | null): MealCard | null
   )
 }
 
-const unique = (xs: string[]) => [...new Set(xs)]
-
 export function buildSnapshot(input: {
   today: ISODate
   /** Minutes past midnight now in the household's zone. */
@@ -65,46 +72,54 @@ export function buildSnapshot(input: {
   now: number
   view: PlanView | undefined
   prep: PrepDay[] | undefined
-  shopping: ShoppingLine[] | undefined
 }): WidgetSnapshot {
-  const { today, nowMin, view, prep, shopping } = input
+  const { today, nowMin, view, prep } = input
 
   const meal = view ? nextMeal(view, nowMin) : null
-  const next: WidgetSnapshot['next'] = meal
-    ? {
-        title: mealTitle(meal, today),
-        when: [meal.date === today ? '' : weekdayName(meal.date, true), timeText(meal.timeText)]
-          .filter(Boolean)
-          .join(' '),
-        dishes: meal.dishes.slice(0, 6).map((d) => d.title),
-        more: Math.max(0, meal.dishes.length - 6),
-      }
-    : null
+  let next: WidgetSnapshot['next'] = null
+  if (meal) {
+    const main = mainDish(meal)
+    const start = meal.id ? startTime(prep ?? [], meal.id, meal.date) : null
+    const total = meal.headcount?.total
+    const people = total ? (meal.hosted ? `${total} people` : `${total} of us`) : ''
+    next = {
+      kicker: [mealTitle(meal, today), meal.timeText ? clockShort(clock12(meal.timeText)) : '']
+        .filter(Boolean)
+        .join(' · '),
+      title: main?.title || meal.name,
+      sub: [start ? `Start at ${clockShort(start)}` : '', people].filter(Boolean).join(' · '),
+      cookUrl: cookUrl(main?.versionId),
+    }
+  }
 
-  const buy = toBuy(shopping)
-  const todays = (prep?.filter((d) => d.date === today).flatMap((d) => d.tasks) ?? []).sort(
-    (a, b) => (clockMinutes(a.time) ?? 0) - (clockMinutes(b.time) ?? 0),
-  )
-
-  const week = (view?.days ?? []).map((d) => {
-    const cooked = [...d.meals, ...holyMeals(d, view?.runs ?? [])]
-    if (d.eve?.meal) cooked.push(d.eve.meal)
+  const todays = mergeDays(prep ?? []).find((d) => d.date === today)?.tasks ?? []
+  const tasks = todays.map((t) => {
+    const sitting = t.waitUntil ?? (t.passive ? t.endTime : undefined)
     return {
-      label: `${weekdayName(d.date, true)} ${Number(d.date.slice(8))}`,
-      today: d.date === today,
-      note: d.holidays.map((h) => h.name)[0] ?? (d.isShabbat ? (view?.parasha ?? 'Shabbat') : ''),
-      meals: unique(cooked.filter((m) => m.planned && !m.virtual).map((m) => m.name)),
+      time: lowerTime(t.time),
+      text: t.text,
+      sub: [
+        t.passive || t.waitUntil
+          ? sitting
+            ? PREP.sitsUntil(lowerTime(sitting))
+            : PREP.passive
+          : '',
+        t.mealName,
+      ]
+        .filter(Boolean)
+        .join(' · '),
+      done: t.done,
+      cookUrl: t.kind === 'active' ? cookUrl(t.versionId) : null,
     }
   })
 
   return {
     updatedAt: input.now,
     next,
-    shopping: { count: buy.length, items: buy.slice(0, 8).map((l) => l.name) },
+    // Not-done first so the widget's few rows show what is left; done ones trail for context.
     prep: {
-      tasks: todays.slice(0, 8).map((t) => ({ time: t.time, text: t.text, done: t.done })),
-      left: todays.filter((t) => !t.done).length,
+      tasks: [...tasks.filter((t) => !t.done), ...tasks.filter((t) => t.done)].slice(0, 10),
+      left: tasks.filter((t) => !t.done).length,
     },
-    week,
   }
 }

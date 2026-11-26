@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import type { MealCard, PlanView, PrepDay, ShoppingLine } from '@/lib/api/types'
+import type { MealCard, PlanView, PrepDay } from '@/lib/api/types'
 
 import { buildSnapshot, nextMeal } from './model'
 
@@ -53,37 +53,60 @@ describe('nextMeal', () => {
 })
 
 describe('buildSnapshot', () => {
+  const task = (over: Record<string, unknown>) => ({
+    id: String(over.text),
+    kind: 'active',
+    mealName: 'Dinner',
+    mealId: 'm1',
+    done: false,
+    ...over,
+  })
   const prep = [
     {
       date: '2026-11-19',
+      meals: [],
       tasks: [
-        { time: '5:00 PM', text: 'Roast', done: false },
-        { time: '9:00 AM', text: 'Marinate', done: true },
+        task({ time: '5:00 PM', text: 'Roast', versionId: 'v1' }),
+        task({ time: '9:00 AM', text: 'Marinate', done: true }),
+        task({ time: '3:00 PM', text: 'Rise', kind: 'passive', passive: true, endTime: '4:00 PM' }),
       ],
     },
-    { date: '2026-11-20', tasks: [{ time: '8:00 AM', text: 'Bake', done: false }] },
+    { date: '2026-11-20', meals: [], tasks: [task({ time: '8:00 AM', text: 'Bake' })] },
   ] as unknown as PrepDay[]
-  const shopping = [
-    { name: 'Onions', checked: false, staple: false },
-    { name: 'Salt', checked: false, staple: true },
-    { name: 'Chicken', checked: true, staple: false },
-  ] as unknown as ShoppingLine[]
 
-  it('collects next meal, today’s prep in time order, and what is left to buy', () => {
+  it('builds the cook-next card and today’s prep, open tasks first', () => {
     const s = buildSnapshot({
       today: '2026-11-19',
       nowMin: 12 * 60,
       now: 1,
-      view: view([day('2026-11-19', [meal()])]),
+      view: view([
+        day('2026-11-19', [
+          meal({
+            headcount: { total: 6 },
+            hosted: true,
+            dishes: [
+              { title: 'Rice', course: 'side' },
+              { title: 'Silan chicken', course: 'main', versionId: 'v9' },
+            ],
+          } as Partial<MealCard>),
+        ]),
+      ]),
       prep,
-      shopping,
     })
-    expect(s.next).toMatchObject({ title: 'Tonight’s dinner', when: '7:00 pm' })
-    expect(s.next?.dishes).toEqual(['Silan chicken', 'Rice'])
-    expect(s.prep.tasks.map((t) => t.text)).toEqual(['Marinate', 'Roast'])
-    expect(s.prep.left).toBe(1)
-    expect(s.shopping).toEqual({ count: 1, items: ['Onions'] })
-    expect(s.week[0]).toMatchObject({ today: true, meals: ['Dinner'] })
+    expect(s.next).toEqual({
+      kicker: 'Tonight’s dinner · 7:00',
+      title: 'Silan chicken',
+      sub: 'Start at 3:00 · 6 people',
+      cookUrl: 'tavshil://cook/v9',
+    })
+    expect(s.prep.tasks.map((t) => t.text)).toEqual(['Rise', 'Roast', 'Marinate'])
+    expect(s.prep.tasks[0]).toMatchObject({
+      time: '3:00 pm',
+      sub: 'Passive · until 4:00 pm · Dinner',
+      cookUrl: null,
+    })
+    expect(s.prep.tasks[1].cookUrl).toBe('tavshil://cook/v1')
+    expect(s.prep.left).toBe(2)
   })
 
   it('is empty-safe before anything loads', () => {
@@ -93,9 +116,8 @@ describe('buildSnapshot', () => {
       now: 1,
       view: undefined,
       prep: undefined,
-      shopping: undefined,
     })
     expect(s.next).toBeNull()
-    expect(s.week).toEqual([])
+    expect(s.prep).toEqual({ tasks: [], left: 0 })
   })
 })
