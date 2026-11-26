@@ -1,6 +1,6 @@
 {
   "name": "tavshil",
-  "version": "3.2.2",
+  "version": "3.3.0",
   "private": true,
   "main": "expo-router/entry",
   "packageManager": "pnpm@12.3.4",

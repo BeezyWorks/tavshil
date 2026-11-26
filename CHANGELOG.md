@@ -1,3 +1,19 @@
+# [3.3.0](https://github.com/BeezyWorks/tavshil/compare/v3.2.2...v3.3.0) (2026-11-26)
+
+
+### Bug Fixes
+
+* **app:** keep the iPad tab bar at the top, without the sidebar ([86c9a12](https://github.com/BeezyWorks/tavshil/commit/86c9a121bd4740f78b9c9e1c4ddccc76999a895f))
+* **app:** open shared routes in the current tab's stack on iOS ([d6c20df](https://github.com/BeezyWorks/tavshil/commit/d6c20df52fc2b62e82c4487f75ecb48b4c02b324))
+
+
+### Features
+
+* **app:** add dishes from the day panel, page and zoom the week and month ([2e878e9](https://github.com/BeezyWorks/tavshil/commit/2e878e94ef9999e43c7179ce7d4f5d072b718f9c))
+* **app:** fold Prep into Plan as a second view of the same days ([e3344e9](https://github.com/BeezyWorks/tavshil/commit/e3344e9922602970bb935b227602364446a61133))
+* **app:** recipe search takes the page while typing ([daf486b](https://github.com/BeezyWorks/tavshil/commit/daf486b89e025889082638ffdbf4b9d6894ef67f))
+* **app:** widget shows what to cook next and today's prep ([128dd9f](https://github.com/BeezyWorks/tavshil/commit/128dd9f15cea39bde9858403de18d6bfbd0f396f))
+
 ## [3.2.2](https://github.com/BeezyWorks/tavshil/compare/v3.2.1...v3.2.2) (2026-11-24)
 
 
