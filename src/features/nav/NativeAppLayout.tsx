@@ -12,7 +12,8 @@ import { badgeText, useNavCounts, type NextPrep } from './counts'
 
 /**
  * iOS: system tabs. iPhone gets Plan, Shopping, Prep, Recipes, More (People lives in More);
- * iPad adds People as its own tab, with the tab bar at the top as the system draws it there.
+ * iPad adds People as its own tab, with the tab bar at the top as the system draws it there
+ * (no sidebar: the bar stays put rather than folding out to the side).
  * Each tab is a route group with its own stack (see the `(plan,shopping,...)/_layout` files).
  */
 export function NativeAppLayout() {
@@ -50,7 +51,7 @@ function Tabs() {
   const shopping = badgeText(counts.shopping)
   const prep = badgeText(counts.prep)
   return (
-    <NativeTabs tintColor={colors.accent} sidebarAdaptable={pad || undefined}>
+    <NativeTabs tintColor={colors.accent}>
       {!pad && counts.next ? (
         <NativeTabs.BottomAccessory>
           <NextPrepAccessory next={counts.next} />
