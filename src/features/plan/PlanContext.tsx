@@ -52,6 +52,21 @@ export function recipeHref(recipeId: string, meal: MealCard): string {
   return `/recipes/${recipeId}?${q.toString()}`
 }
 
+/**
+ * A prep task's recipe, carrying its meal like `recipeHref` so the page shows the strip back to the plan
+ * rather than "‹ Recipes". A task for no one meal opens the bare recipe.
+ */
+export function taskRecipeHref(t: {
+  recipeId?: string | null
+  mealId: string | null
+  mealDate?: ISODate
+  mealName: string
+}): string {
+  if (!t.mealId || !t.mealDate) return `/recipes/${t.recipeId}`
+  const q = new URLSearchParams({ meal: t.mealId, date: t.mealDate, slot: t.mealName })
+  return `/recipes/${t.recipeId}?${q.toString()}`
+}
+
 export function PlanProvider({
   today,
   selected,

@@ -10,6 +10,7 @@ import { PLAN, PREP } from '@/lib/strings'
 import { colors, fonts } from '@/theme/tokens'
 
 import { lowerTime } from '../prep/model'
+import { taskRecipeHref } from './PlanContext'
 
 /**
  * A prep task in a side panel: tick, time, what to do, and quick links to the recipe and cooking mode.
@@ -27,8 +28,7 @@ export function TaskItem({
 }) {
   const router = useTabRouter()
   const set = useSetPrepDone()
-  const recipe =
-    t.recipeId && !inDish ? () => router.push(`/recipes/${t.recipeId}` as Href) : undefined
+  const recipe = t.recipeId && !inDish ? () => router.push(taskRecipeHref(t) as Href) : undefined
   const cook =
     t.versionId && t.kind === 'active'
       ? () => router.push(`/cook/${t.versionId}` as Href)

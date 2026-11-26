@@ -168,7 +168,9 @@ export function CookScreen() {
       },
     })
   }
-  const exit = () => router.replace(`/recipes/${recipe.id}` as Href)
+  // Back to wherever cooking started (the recipe with its meal strip, or the plan); opened cold, the recipe.
+  const exit = () =>
+    router.canGoBack() ? router.back() : router.replace(`/recipes/${recipe.id}` as Href)
 
   return (
     <View style={[styles.screen, { paddingTop: insets.top }]}>

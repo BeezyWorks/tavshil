@@ -10,6 +10,7 @@ import { storage } from '@/lib/storage'
 import { PREP } from '@/lib/strings'
 import { colors, fontSize, fonts, radius, space } from '@/theme/tokens'
 
+import { taskRecipeHref } from '../plan/PlanContext'
 import {
   dayShort,
   filterPrep,
@@ -195,7 +196,7 @@ function TaskRow({
 }) {
   const router = useTabRouter()
   const set = useSetPrepDone()
-  const open = t.recipeId ? () => router.push(`/recipes/${t.recipeId}` as Href) : undefined
+  const open = t.recipeId ? () => router.push(taskRecipeHref(t) as Href) : undefined
   const cook =
     t.versionId && t.kind === 'active'
       ? () => router.push(`/cook/${t.versionId}` as Href)
