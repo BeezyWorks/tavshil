@@ -9,9 +9,9 @@ import { Platform } from 'react-native'
  * the Recipes list instead of where the user came from.
  */
 const SHARED: [RegExp, string[]][] = [
-  [/^\/recipes\/(?!import(?:[/?]|$))[^/?]+/, ['recipes', 'plan', 'shopping', 'prep']],
-  [/^\/(?:hosted|meal)\//, ['plan', 'shopping', 'prep']],
-  [/^\/people(?:[/?]|$)/, ['more', 'people', 'plan', 'shopping', 'prep', 'recipes']],
+  [/^\/recipes\/(?!import(?:[/?]|$))[^/?]+/, ['recipes', 'plan', 'shopping']],
+  [/^\/(?:hosted|meal)\//, ['plan', 'shopping']],
+  [/^\/people(?:[/?]|$)/, ['more', 'people', 'plan', 'shopping', 'recipes']],
 ]
 
 /** `href` pinned to the current tab's stack when that tab has the route; otherwise unchanged. */

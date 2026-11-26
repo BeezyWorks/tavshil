@@ -236,7 +236,7 @@ export function planReminders(input: PlanInput): Reminder[] {
         fireAt,
         title: t.text,
         body,
-        url: t.recipeId ? `/recipes/${t.recipeId}` : '/prep',
+        url: t.recipeId ? `/recipes/${t.recipeId}` : '/?show=todo',
       })
     }
   }

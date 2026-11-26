@@ -6,7 +6,7 @@ import { Pressable, StyleSheet, View } from 'react-native'
 import { Button, Empty, Loading, Pill, Screen, Segmented, Text, useLayout } from '@/components'
 import { useHosted } from '@/lib/api/hooks'
 import type { HostedHolyDay, HostedMeal, HostedPage } from '@/lib/api/types'
-import { hostedHref, planHref, printHref } from '@/lib/plan'
+import { hostedHref, planHref, printHref, todoHref } from '@/lib/plan'
 import { colors, radius, size, space } from '@/theme/tokens'
 
 import { AddMealForm } from './AddMealForm'
@@ -81,7 +81,13 @@ function HostedBody({ page }: { page: HostedPage }) {
             href={printHref(page.key)}
           />
           <Button label="Shopping list" icon="cart" variant="secondary" small href="/shopping" />
-          <Button label="Prep schedule" icon="calendar" variant="secondary" small href="/prep" />
+          <Button
+            label="Prep"
+            icon="calendar"
+            variant="secondary"
+            small
+            href={todoHref({ day: page.from })}
+          />
         </View>
       }
     >

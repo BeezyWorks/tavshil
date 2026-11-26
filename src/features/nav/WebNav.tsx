@@ -18,7 +18,7 @@ const blur = (Platform.OS === 'web' ? { backdropFilter: 'blur(22px)' } : {}) as 
 
 function useBadges(): Partial<Record<Section, string>> {
   const counts = useNavCounts()
-  return { shopping: badgeText(counts.shopping), prep: badgeText(counts.prep) }
+  return { plan: badgeText(counts.prep), shopping: badgeText(counts.shopping) }
 }
 
 function Brand() {

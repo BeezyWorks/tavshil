@@ -4,6 +4,7 @@ import React from 'react'
 import { Platform, Pressable, StyleSheet, View } from 'react-native'
 
 import { Text } from '@/components'
+import { TODO_HREF } from '@/lib/plan'
 import { NAV, NEXT_PREP } from '@/lib/strings'
 import { colors, fonts, fontSize, space } from '@/theme/tokens'
 
@@ -11,7 +12,7 @@ import { AppGate } from './AppGate'
 import { badgeText, useNavCounts, type NextPrep } from './counts'
 
 /**
- * iOS: system tabs. iPhone gets Plan, Shopping, Prep, Recipes, More (People lives in More);
+ * iOS: system tabs. iPhone gets Plan, Shopping, Recipes, More (People lives in More);
  * iPad adds People as its own tab, with the tab bar at the top as the system draws it there
  * (no sidebar: the bar stays put rather than folding out to the side).
  * Each tab is a route group with its own stack (see the `(plan,shopping,...)/_layout` files).
@@ -31,8 +32,8 @@ function NextPrepAccessory({ next }: { next: NextPrep }) {
     <Pressable
       accessibilityRole="button"
       accessibilityLabel={`${NEXT_PREP}: ${next.when}, ${next.text}`}
-      accessibilityHint="Opens the prep schedule"
-      onPress={() => router.navigate(NAV.prep.href as Href)}
+      accessibilityHint="Opens what to do"
+      onPress={() => router.navigate(TODO_HREF as Href)}
       style={styles.accessory}
     >
       <View style={styles.dot} />
@@ -60,16 +61,12 @@ function Tabs() {
       <NativeTabs.Trigger name="(plan)">
         <NativeTabs.Trigger.Icon sf="calendar" />
         <NativeTabs.Trigger.Label>{NAV.plan.label}</NativeTabs.Trigger.Label>
+        <NativeTabs.Trigger.Badge hidden={!prep}>{prep}</NativeTabs.Trigger.Badge>
       </NativeTabs.Trigger>
       <NativeTabs.Trigger name="(shopping)">
         <NativeTabs.Trigger.Icon sf={{ default: 'cart', selected: 'cart.fill' }} />
         <NativeTabs.Trigger.Label>{NAV.shopping.label}</NativeTabs.Trigger.Label>
         <NativeTabs.Trigger.Badge hidden={!shopping}>{shopping}</NativeTabs.Trigger.Badge>
-      </NativeTabs.Trigger>
-      <NativeTabs.Trigger name="(prep)">
-        <NativeTabs.Trigger.Icon sf="timer" />
-        <NativeTabs.Trigger.Label>{NAV.prep.label}</NativeTabs.Trigger.Label>
-        <NativeTabs.Trigger.Badge hidden={!prep}>{prep}</NativeTabs.Trigger.Badge>
       </NativeTabs.Trigger>
       <NativeTabs.Trigger name="(recipes)">
         <NativeTabs.Trigger.Icon sf={{ default: 'book', selected: 'book.fill' }} />
@@ -96,7 +93,6 @@ function Tabs() {
 export const tabAnchors = {
   plan: { anchor: 'index' },
   shopping: { anchor: 'shopping' },
-  prep: { anchor: 'prep' },
   recipes: { anchor: 'recipes/index' },
   ...(Platform.OS === 'ios' && Platform.isPad ? { people: { anchor: 'people/index' } } : {}),
   more: { anchor: 'more' },

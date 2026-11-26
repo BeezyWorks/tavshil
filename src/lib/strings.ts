@@ -33,7 +33,6 @@ export function dishName(title: string, version?: string | null): string {
 export const NAV = {
   plan: { href: '/', label: 'Plan' },
   shopping: { href: '/shopping', label: 'Shopping' },
-  prep: { href: '/prep', label: 'Prep' },
   recipes: { href: '/recipes', label: 'Recipes' },
   people: { href: '/people', label: 'People' },
   more: { href: '/more', label: 'More' },
@@ -66,13 +65,11 @@ export const NAV_MENU = {
 
 export const NEXT_PREP = 'Next prep'
 
-/** The Prep screen. */
+/** Prep: Plan's To do view and the prep panels. */
 export const PREP = {
   title: 'Prep',
   empty: 'Add dishes to a meal and its prep appears here, worked back from when you serve.',
   nothing: 'Nothing to prep for this pick.',
-  pick: 'Pick one or more meals. None picked shows everything.',
-  everything: 'Everything coming up',
   left: (n: number) => (n === 1 ? '1 task left' : `${n} tasks left`),
   passive: 'Passive',
   sitsUntil: (t: string) => `Passive · until ${t}`,
@@ -106,15 +103,21 @@ export const PLAN = {
   toBuy: 'To buy',
   list: 'List',
   change: 'Change',
-  changeDinner: 'Change dinner',
+  editMeal: (slot: string) => `Edit ${slot}`,
   done: 'Done',
   close: 'Close',
   addDish: 'Add a dish',
   addDishPlaceholder: 'Search your recipes or type a dish',
-  removeDinner: 'Remove this dinner',
+  removeMeal: (slot: string) => `Remove this ${slot}`,
   cookedLately: 'Cooked lately',
   somethingElse: 'Something else',
   prep: 'Prep',
+  recipe: 'Recipe',
+  meals: 'Meals',
+  todo: 'To do',
+  allPrep: 'All prep',
+  nothingToPrep: 'Nothing to prep this day.',
+  today: 'Today',
   noRecipe: 'No recipe',
   hostAMeal: 'Host a meal…',
 } as const

@@ -8,16 +8,15 @@ export type Section = keyof typeof NAV
 export const SECTION_ICON: Record<Section, IconName> = {
   plan: 'calendar',
   shopping: 'cart',
-  prep: 'timer',
   recipes: 'book',
   people: 'people',
   more: 'more',
 }
 
 /** Wide web: the pill. People has its own tab; the rest lives behind the gear. */
-export const WIDE_TABS: Section[] = ['plan', 'shopping', 'prep', 'recipes', 'people']
+export const WIDE_TABS: Section[] = ['plan', 'shopping', 'recipes', 'people']
 /** Phones (and narrow web): People moves into More. */
-export const NARROW_TABS: Section[] = ['plan', 'shopping', 'prep', 'recipes', 'more']
+export const NARROW_TABS: Section[] = ['plan', 'shopping', 'recipes', 'more']
 
 /** Whether People is a tab of its own here, or a row in More. */
 export function peopleIsATab(wide: boolean): boolean {
@@ -29,7 +28,6 @@ const under = (path: string, prefix: string) => path === prefix || path.startsWi
 /** Which section a path belongs to, for highlighting the nav. */
 export function sectionOf(path: string, wide: boolean): Section {
   if (under(path, '/shopping') || under(path, '/use-soon')) return 'shopping'
-  if (under(path, '/prep')) return 'prep'
   if (under(path, '/recipes')) return 'recipes'
   if (under(path, '/people')) return wide ? 'people' : 'more'
   if (under(path, '/more') || under(path, '/kitchen') || under(path, '/settings')) return 'more'

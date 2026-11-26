@@ -20,6 +20,10 @@ export interface Selection {
 interface Ctx {
   today: ISODate
   selected: Selection | null
+  /** Wide: the day the side panel shows when no meal is open. */
+  day: ISODate
+  /** A day's heading was clicked: show its prep beside the week, closing any open meal. */
+  selectDay: (date: ISODate) => void
   /** A meal was tapped: its recipe, its hosted page, or the panel. */
   openMeal: (meal: MealCard) => void
   /** An empty slot (or the "+" of a day) was tapped. */
@@ -52,11 +56,15 @@ export function PlanProvider({
   today,
   selected,
   setSelected,
+  day,
+  setDay,
   children,
 }: {
   today: ISODate
   selected: Selection | null
   setSelected: (s: Selection | null) => void
+  day: ISODate
+  setDay: (d: ISODate) => void
   children: React.ReactNode
 }) {
   const router = useTabRouter()
@@ -65,6 +73,11 @@ export function PlanProvider({
     () => ({
       today,
       selected,
+      day,
+      selectDay: (date) => {
+        setDay(date)
+        setSelected(null)
+      },
       openMeal: (meal) => {
         const tap = tapOf(meal)
         if (tap.kind === 'hosted') return router.push(hostedHref(tap.key) as Href)
@@ -84,7 +97,7 @@ export function PlanProvider({
       close: () => setSelected(null),
       setChange: (on) => setSelected(selected ? { ...selected, change: on } : null),
     }),
-    [today, selected, setSelected, router, ensure],
+    [today, selected, setSelected, day, setDay, router, ensure],
   )
   return <PlanCtx.Provider value={value}>{children}</PlanCtx.Provider>
 }

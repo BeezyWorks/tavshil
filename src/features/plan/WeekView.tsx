@@ -252,9 +252,10 @@ function Column({
   prep: PrepDay[]
   labels: Map<string, string>
 }) {
-  const { addMeal, openEve } = usePlanCtx()
+  const { addMeal, openEve, selectDay, day: picked, selected } = usePlanCtx()
   const today = day.date === view.today
   const holy = !!day.holyDay
+  const on = !selected && picked === day.date
   const meals = holy ? holyMeals(day, view.runs) : day.meals
   const tasks = prep
     .filter((p) => p.date === day.date)
@@ -272,14 +273,20 @@ function Column({
       accessibilityLabel={`${weekdayName(day.date)} ${dayNum(day.date)}`}
       style={[styles.column, !last && styles.columnRule, tint && { backgroundColor: tint }]}
     >
-      <View>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={`Show prep for ${weekdayName(day.date)} ${dayNum(day.date)}`}
+        accessibilityState={{ selected: on }}
+        onPress={() => selectDay(day.date)}
+        style={[styles.colHead, on && styles.colHeadOn]}
+      >
         <Text
           style={[styles.colLabel, accent && { color: accent, fontFamily: fonts.bodySemiBold }]}
         >
           {today ? 'Today' : holy ? day.holyDay!.label : weekdayName(day.date, true)}
         </Text>
         <Text style={[styles.colNum, accent && { color: accent }]}>{dayNum(day.date)}</Text>
-      </View>
+      </Pressable>
       {meals.map((m) => (
         <ColumnMeal key={m.id ?? `${m.date}-${m.slot}`} meal={m} />
       ))}
@@ -297,7 +304,11 @@ function Column({
           {h.name}
         </Text>
       ))}
-      {note ? <Text style={styles.colNote}>{note}</Text> : null}
+      {note ? (
+        <Pressable accessibilityRole="button" onPress={() => selectDay(day.date)}>
+          <Text style={styles.colNote}>{note}</Text>
+        </Pressable>
+      ) : null}
       <View style={{ flexGrow: 1 }} />
       {day.eve ? null : (
         <Pressable
@@ -353,6 +364,14 @@ const styles = StyleSheet.create({
   },
   column: { flex: 1, minWidth: 0, paddingVertical: 14, paddingHorizontal: 12, gap: 12 },
   columnRule: { borderRightWidth: StyleSheet.hairlineWidth, borderRightColor: colors.separator },
+  colHead: {
+    marginHorizontal: -6,
+    marginTop: -4,
+    paddingHorizontal: 6,
+    paddingVertical: 4,
+    borderRadius: 8,
+  },
+  colHeadOn: { backgroundColor: colors.wash },
   colLabel: { fontFamily: fonts.body, fontSize: 12, color: colors.muted },
   colNum: { fontFamily: fonts.bodySemiBold, fontSize: 20, color: colors.ink },
   colNote: { fontFamily: fonts.body, fontSize: 12, color: colors.muted },

@@ -71,7 +71,7 @@ describe('planReminders', () => {
     expect(r.map((x) => x.title)).toEqual(['Marinate chicken', 'Soak beans'])
     expect(r[0].fireAt).toBe(at('2026-11-18', '08:45'))
     expect(r[0].body).toBe('For Friday night dinner')
-    expect(r[0].url).toBe('/prep')
+    expect(r[0].url).toBe('/?show=todo')
   })
 
   it('schedules active tasks only when cooking is on, and can turn pre-prep off', () => {

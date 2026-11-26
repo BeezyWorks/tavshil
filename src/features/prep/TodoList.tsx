@@ -1,9 +1,9 @@
 import { type Href } from 'expo-router'
 import { useTabRouter } from '@/lib/tabRoute'
-import React, { useCallback, useMemo, useState } from 'react'
+import React, { useCallback, useEffect, useMemo, useState } from 'react'
 import { Pressable, StyleSheet, View } from 'react-native'
 
-import { Checkbox, Empty, Loading, Pill, Screen, Text, useLayout } from '@/components'
+import { Checkbox, Empty, Loading, Pill, Text } from '@/components'
 import { useSetPrepDone, usePrep, useToday } from '@/lib/api/hooks'
 import type { PrepDay, PrepTask } from '@/lib/api/types'
 import { storage } from '@/lib/storage'
@@ -17,11 +17,9 @@ import {
   prepMeals,
   progressText,
   restBlock,
-  tasksLeft,
   validSelection,
   type PrepMeal,
 } from './model'
-import { PrepActions } from './PrepActions'
 
 const KEY = 'tavshil.prep.meals'
 
@@ -42,110 +40,44 @@ function useSelection(): [string[], (next: string[]) => void] {
   return [sel, set]
 }
 
-export function PrepScreen() {
-  const { wide } = useLayout()
+/**
+ * Plan's "To do" on a phone: the prep tasks by the day they are done, from today on. Chips narrow it to some
+ * meals (`meal` picks one on arrival, from a meal's "All prep" link).
+ */
+export function TodoList({ meal }: { meal?: string }) {
   const { data, isLoading } = usePrep()
   const today = useToday()
   const [stored, setSelected] = useSelection()
+  useEffect(() => {
+    if (meal) setSelected([meal])
+  }, [meal, setSelected])
   const meals = useMemo(() => prepMeals(data ?? []), [data])
   const selected = useMemo(() => validSelection(stored, meals), [stored, meals])
   const days = useMemo(() => filterPrep(data ?? [], selected), [data, selected])
   const toggle = (id: string) =>
     setSelected(selected.includes(id) ? selected.filter((x) => x !== id) : [...selected, id])
 
+  if (isLoading || !data) return <Loading />
+  if (meals.length === 0 && days.length === 0) return <Empty>{PREP.empty}</Empty>
   return (
-    <Screen title={PREP.title} actions={<PrepActions />}>
-      {isLoading || !data ? (
-        <Loading />
-      ) : meals.length === 0 && days.length === 0 ? (
-        <Empty>{PREP.empty}</Empty>
-      ) : wide ? (
-        <View style={styles.wide}>
-          <View style={styles.side}>
-            <Text variant="small">{PREP.pick}</Text>
-            <View style={styles.group}>
-              {meals.map((m, i) => (
-                <MealRow
-                  key={m.mealId}
-                  meal={m}
-                  today={today}
-                  checked={selected.includes(m.mealId)}
-                  onToggle={() => toggle(m.mealId)}
-                  last={i === meals.length - 1}
-                />
-              ))}
-            </View>
-          </View>
-          <View style={styles.main}>
-            <View style={styles.mainHead}>
-              <Text variant="h2" style={styles.flex}>
-                {selected.length
-                  ? joinNames(meals.filter((m) => selected.includes(m.mealId)).map((m) => m.name))
-                  : PREP.everything}
-              </Text>
-              <Text variant="small">{PREP.left(tasksLeft(days))}</Text>
-            </View>
-            <Timeline days={days} today={today} />
-          </View>
-        </View>
+    <View style={styles.phone}>
+      <View style={styles.chips} accessibilityRole="menu">
+        {meals.map((m) => (
+          <Pill
+            key={m.mealId}
+            label={m.name}
+            selected={selected.includes(m.mealId)}
+            onPress={() => toggle(m.mealId)}
+          />
+        ))}
+      </View>
+      {selected.length ? (
+        meals
+          .filter((m) => selected.includes(m.mealId))
+          .map((m) => <MealCard key={m.mealId} meal={m} days={days} today={today} />)
       ) : (
-        <View style={styles.phone}>
-          <View style={styles.chips} accessibilityRole="menu">
-            {meals.map((m) => (
-              <Pill
-                key={m.mealId}
-                label={m.name}
-                selected={selected.includes(m.mealId)}
-                onPress={() => toggle(m.mealId)}
-              />
-            ))}
-          </View>
-          {selected.length ? (
-            meals
-              .filter((m) => selected.includes(m.mealId))
-              .map((m) => <MealCard key={m.mealId} meal={m} days={days} today={today} />)
-          ) : (
-            <Timeline days={days} today={today} />
-          )}
-        </View>
+        <Timeline days={days} today={today} />
       )}
-    </Screen>
-  )
-}
-
-const joinNames = (names: string[]) =>
-  names.length < 2 ? (names[0] ?? '') : `${names.slice(0, -1).join(', ')} and ${names.at(-1)}`
-
-/** A meal in the wide list: checkbox, name, serve time, progress. */
-function MealRow({
-  meal,
-  today,
-  checked,
-  onToggle,
-  last,
-}: {
-  meal: PrepMeal
-  today?: string
-  checked: boolean
-  onToggle: () => void
-  last: boolean
-}) {
-  const pct = meal.tasks.length ? (meal.done / meal.tasks.length) * 100 : 0
-  return (
-    <View style={[styles.mealRow, !last && styles.sep]}>
-      <Checkbox label={`Show prep for ${meal.name}`} checked={checked} onChange={onToggle} />
-      <Pressable style={styles.flex} onPress={onToggle} accessibilityElementsHidden>
-        <View style={styles.mealTitle}>
-          <Text variant="bodyStrong" style={styles.flex}>
-            {meal.name}
-          </Text>
-          <Text variant="small">{serveText(meal)}</Text>
-        </View>
-        <View style={styles.bar}>
-          <View style={[styles.barFill, { width: `${pct}%` }]} />
-        </View>
-        <Text variant="small">{progressText(meal, today)}</Text>
-      </Pressable>
     </View>
   )
 }
@@ -226,7 +158,7 @@ function Timeline({ days, today }: { days: PrepDay[]; today?: string }) {
 }
 
 /** The cut-off line before Shabbat or Yom Tov, and the block that follows. */
-function RestLine({ day }: { day: PrepDay }) {
+export function RestLine({ day }: { day: PrepDay }) {
   const r = day.rest
   if (!r) return null
   const b = restBlock(r)
@@ -337,16 +269,6 @@ function TaskRow({
 const styles = StyleSheet.create({
   flex: { flex: 1 },
   chev: { paddingTop: 10, fontSize: fontSize.xl },
-  wide: { flexDirection: 'row', gap: space.xl, alignItems: 'flex-start' },
-  side: { width: 320, gap: space.sm },
-  main: {
-    flex: 1,
-    backgroundColor: colors.surface,
-    borderRadius: radius.card,
-    padding: space.xl,
-    gap: space.md,
-  },
-  mainHead: { flexDirection: 'row', alignItems: 'baseline', gap: space.md },
   phone: { gap: space.lg },
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: space.sm },
   timeline: { gap: space.lg },
@@ -355,13 +277,6 @@ const styles = StyleSheet.create({
   insideHeading: { paddingHorizontal: space.lg, paddingTop: space.md },
   group: { backgroundColor: colors.surface, borderRadius: radius.card, overflow: 'hidden' },
   sep: { borderBottomWidth: 1, borderBottomColor: colors.separator },
-  mealRow: {
-    flexDirection: 'row',
-    gap: space.sm,
-    paddingHorizontal: space.lg,
-    paddingVertical: space.sm,
-    alignItems: 'center',
-  },
   mealTitle: { flexDirection: 'row', alignItems: 'baseline', gap: space.sm },
   cardHead: { padding: space.lg, gap: space.sm },
   bar: { height: 5, borderRadius: radius.pill, backgroundColor: colors.subtle, overflow: 'hidden' },

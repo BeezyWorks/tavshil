@@ -3,7 +3,7 @@ import { useTabRouter } from '@/lib/tabRoute'
 import React, { useState } from 'react'
 import { Pressable, ScrollView, StyleSheet, View } from 'react-native'
 
-import { RecipePicker, Text } from '@/components'
+import { RecipePicker, Text, useLayout } from '@/components'
 import { Icon } from '@/components/Icon'
 import {
   useAddMealDish,
@@ -26,6 +26,7 @@ import { DayActions } from './DayActions'
 import { recipeHref, usePlanCtx, type Selection } from './PlanContext'
 import { Sheet } from '@/components/Sheet'
 import { ProblemLine } from './Slots'
+import { TaskItem } from './TaskItem'
 
 /** `Tomorrow · 7:00 pm · Us · 4`: where the meal sits and who eats. */
 function subtitle(sel: Selection, today: string): string {
@@ -45,7 +46,7 @@ function heading(sel: Selection, today: string): { title: string; sub?: string }
   const slot = sel.meal ? slotName(sel.meal) : SLOT_LABEL[sel.slot]
   if (sel.meal && sel.change)
     return {
-      title: `Change ${slot.toLowerCase()}, ${dayLabel(sel.date)}`,
+      title: `Edit ${slot.toLowerCase()}, ${dayLabel(sel.date)}`,
       sub: subtitle(sel, today),
     }
   return {
@@ -87,15 +88,11 @@ export function MealSide({ sel }: { sel: Selection }) {
   const h = heading(sel, today)
   const changing = !!sel.meal && sel.change
   return (
-    <View style={styles.side} accessibilityLabel={h.title}>
-      <View style={styles.sideHead}>
-        <View style={{ flex: 1, gap: 2 }}>
-          <Text accessibilityRole="header" style={styles.sideTitle}>
-            {h.title}
-          </Text>
-          {h.sub ? <Text style={styles.sub}>{h.sub}</Text> : null}
-        </View>
-        {changing ? (
+    <SidePanel
+      title={h.title}
+      sub={h.sub}
+      action={
+        changing ? (
           <Pressable
             accessibilityRole="button"
             onPress={() => setChange(false)}
@@ -104,20 +101,55 @@ export function MealSide({ sel }: { sel: Selection }) {
             <Text style={styles.link}>{PLAN.done}</Text>
           </Pressable>
         ) : (
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel={PLAN.close}
-            onPress={close}
-            style={styles.x}
-          >
-            <Text style={{ fontSize: 16, color: colors.muted }}>{'✕'}</Text>
-          </Pressable>
-        )}
+          <CloseButton onPress={close} />
+        )
+      }
+    >
+      <PanelBody sel={sel} />
+    </SidePanel>
+  )
+}
+
+/** The wide panel beside the week: a title, a line under it, an action at the top right, a scrolling body. */
+export function SidePanel({
+  title,
+  sub,
+  action,
+  children,
+}: {
+  title: string
+  sub?: string
+  action?: React.ReactNode
+  children: React.ReactNode
+}) {
+  return (
+    <View style={styles.side} accessibilityLabel={title}>
+      <View style={styles.sideHead}>
+        <View style={{ flex: 1, gap: 2 }}>
+          <Text accessibilityRole="header" style={styles.sideTitle}>
+            {title}
+          </Text>
+          {sub ? <Text style={styles.sub}>{sub}</Text> : null}
+        </View>
+        {action}
       </View>
       <ScrollView contentContainerStyle={styles.body} keyboardShouldPersistTaps="handled">
-        <PanelBody sel={sel} />
+        {children}
       </ScrollView>
     </View>
+  )
+}
+
+export function CloseButton({ onPress, label }: { onPress: () => void; label?: string }) {
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={label ?? PLAN.close}
+      onPress={onPress}
+      style={styles.x}
+    >
+      <Text style={{ fontSize: 16, color: colors.muted }}>{'✕'}</Text>
+    </Pressable>
   )
 }
 
@@ -178,14 +210,13 @@ function DishRow({ dish, meal }: { dish: MealDish; meal: MealCard }) {
 
 function MealView({ meal }: { meal: MealCard }) {
   const router = useTabRouter()
-  const { setChange, today } = usePlanCtx()
+  const { setChange, close, today } = usePlanCtx()
+  const { wide } = useLayout()
   const dishes = useDishes(meal)
+  const slot = slotName(meal).toLowerCase()
   const prep = usePrep()
   const shopping = useShopping()
-  const tasks = (prep.data ?? [])
-    .flatMap((d) => d.tasks)
-    .filter((t) => t.mealId === meal.id && !t.done)
-    .slice(0, 5)
+  const tasks = (prep.data ?? []).flatMap((d) => d.tasks).filter((t) => t.mealId === meal.id)
   const buy = meal.id ? mealShopping(shopping.data, meal.id) : { items: [], buyBy: null }
   return (
     <>
@@ -193,15 +224,26 @@ function MealView({ meal }: { meal: MealCard }) {
         {dishes.map((d) => (
           <DishRow key={d.itemId} dish={d} meal={meal} />
         ))}
+        <AddDish mealId={meal.id as Id} />
       </View>
       <ProblemLine allergies={meal.problems.allergies} gaps={meal.problems.gaps} />
       {tasks.length ? (
-        <Section title={PLAN.prep}>
+        <Section
+          title={PLAN.prep}
+          link={
+            wide
+              ? undefined
+              : {
+                  label: `${PLAN.allPrep} ›`,
+                  onPress: () => {
+                    close()
+                    router.setParams({ show: 'todo', meal: meal.id ?? undefined })
+                  },
+                }
+          }
+        >
           {tasks.map((t) => (
-            <View key={t.id} style={styles.taskRow}>
-              <Text style={styles.taskTime}>{t.time.toLowerCase()}</Text>
-              <Text style={styles.taskText}>{t.text}</Text>
-            </View>
+            <TaskItem key={t.id} task={t} hideMeal />
           ))}
         </Section>
       ) : null}
@@ -218,13 +260,13 @@ function MealView({ meal }: { meal: MealCard }) {
         </Section>
       ) : null}
       <Pressable accessibilityRole="button" onPress={() => setChange(true)} style={styles.change}>
-        <Text style={styles.link}>{PLAN.changeDinner}</Text>
+        <Text style={styles.link}>{PLAN.editMeal(slot)}</Text>
       </Pressable>
     </>
   )
 }
 
-function Section({
+export function Section({
   title,
   link,
   children,
@@ -250,14 +292,56 @@ function Section({
   )
 }
 
-/** Dishes with remove buttons, "Add a dish" (closed until tapped) and "Remove this dinner". */
+/** A tile under the dishes: "+ Add a dish" until tapped, then the recipe search; picking adds it straight away. */
+function AddDish({ mealId, startOpen }: { mealId: Id; startOpen?: boolean }) {
+  const add = useAddMealDish()
+  const [open, setOpen] = useState(!!startOpen)
+  const [error, setError] = useState('')
+  const addDish = async (dish: { versionId?: Id; description?: string }) => {
+    setError('')
+    try {
+      await add.mutateAsync({ mealId, dish: { course: 'main', ...dish } })
+      setOpen(false)
+    } catch (e) {
+      setError((e as Error).message)
+    }
+  }
+  return (
+    <>
+      {open ? (
+        <RecipePicker
+          mealId={mealId}
+          showListWhenEmpty={false}
+          placeholder={PLAN.addDishPlaceholder}
+          onPick={(hit) => addDish({ versionId: hit.versionId })}
+          onAddWithoutRecipe={(t) => addDish({ description: t })}
+          autoFocus
+        />
+      ) : (
+        <Pressable
+          accessibilityRole="button"
+          onPress={() => setOpen(true)}
+          style={[styles.dish, styles.addTile]}
+        >
+          <Icon name="plus" size={20} color={colors.accent} />
+          <Text style={[styles.dishTitle, { color: colors.accent }]}>{PLAN.addDish}</Text>
+        </Pressable>
+      )}
+      {error ? (
+        <Text color={colors.danger} accessibilityRole="alert">
+          {error}
+        </Text>
+      ) : null}
+    </>
+  )
+}
+
+/** Dishes with remove buttons, "Add a dish" and "Remove this meal". */
 function ChangeMeal({ meal }: { meal: MealCard }) {
   const { close, setChange } = usePlanCtx()
   const dishes = useDishes(meal)
-  const add = useAddMealDish()
   const remove = useRemoveMealDish()
   const del = useDeletePlanMeal()
-  const [open, setOpen] = useState(!dishes.length)
   const [error, setError] = useState('')
   const mealId = meal.id as Id
   const run = async (fn: () => Promise<unknown>) => {
@@ -268,11 +352,6 @@ function ChangeMeal({ meal }: { meal: MealCard }) {
       setError((e as Error).message)
     }
   }
-  const addDish = (dish: { versionId?: Id; description?: string }) =>
-    run(async () => {
-      await add.mutateAsync({ mealId, dish: { course: 'main', ...dish } })
-      setOpen(false)
-    })
   return (
     <>
       <View style={styles.list}>
@@ -289,21 +368,7 @@ function ChangeMeal({ meal }: { meal: MealCard }) {
             </Pressable>
           </View>
         ))}
-      </View>
-      <View style={{ gap: 6 }}>
-        <Text style={styles.fieldLabel}>{PLAN.addDish}</Text>
-        {open ? (
-          <RecipePicker
-            mealId={mealId}
-            showListWhenEmpty={false}
-            placeholder={PLAN.addDishPlaceholder}
-            onPick={(hit) => addDish({ versionId: hit.versionId })}
-            onAddWithoutRecipe={(t) => addDish({ description: t })}
-            autoFocus
-          />
-        ) : (
-          <ClosedSearch onPress={() => setOpen(true)} />
-        )}
+        <AddDish mealId={mealId} startOpen={!dishes.length} />
       </View>
       {error ? (
         <Text color={colors.danger} accessibilityRole="alert">
@@ -321,7 +386,9 @@ function ChangeMeal({ meal }: { meal: MealCard }) {
           }
           style={styles.change}
         >
-          <Text style={[styles.link, { color: colors.danger }]}>{PLAN.removeDinner}</Text>
+          <Text style={[styles.link, { color: colors.danger }]}>
+            {PLAN.removeMeal(slotName(meal).toLowerCase())}
+          </Text>
         </Pressable>
         <Pressable
           accessibilityRole="button"
@@ -332,23 +399,6 @@ function ChangeMeal({ meal }: { meal: MealCard }) {
         </Pressable>
       </View>
     </>
-  )
-}
-
-/** A search field that is only a button until tapped, so the keyboard stays down. */
-function ClosedSearch({ onPress, label }: { onPress: () => void; label?: string }) {
-  return (
-    <Pressable
-      accessibilityRole="search"
-      accessibilityLabel={label ?? PLAN.addDishPlaceholder}
-      onPress={onPress}
-      style={styles.search}
-    >
-      <Text color={colors.muted}>{'⌕'}</Text>
-      <Text color={colors.muted} style={{ flex: 1 }}>
-        {PLAN.addDishPlaceholder}
-      </Text>
-    </Pressable>
   )
 }
 
@@ -502,9 +552,6 @@ const styles = StyleSheet.create({
     letterSpacing: 0.6,
     color: colors.muted,
   },
-  taskRow: { flexDirection: 'row', gap: 10 },
-  taskTime: { width: 64, fontFamily: fonts.body, fontSize: 14, color: colors.muted },
-  taskText: { flex: 1, fontFamily: fonts.body, fontSize: 14, color: colors.ink },
   buy: { fontFamily: fonts.body, fontSize: 14, color: colors.ink },
   change: { minHeight: 44, justifyContent: 'center', alignSelf: 'flex-start' },
   fieldLabel: { fontFamily: fonts.bodySemiBold, fontSize: 13, color: colors.muted },
@@ -543,5 +590,12 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   pillOn: { backgroundColor: colors.accent },
+  addTile: {
+    backgroundColor: 'transparent',
+    borderWidth: 1.5,
+    borderStyle: 'dashed',
+    borderColor: colors.line,
+    gap: 10,
+  },
   pillText: { fontFamily: fonts.bodyMedium, fontSize: 14, color: colors.ink },
 })

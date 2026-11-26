@@ -16,6 +16,21 @@ export function planHref(opts: { week?: ISODate; view?: 'week' | 'month' } = {})
   return s ? `/?${s}` : '/'
 }
 
+/**
+ * Plan's "To do": the prep tasks by the day they are done. A phone shows the To do view (narrowed to `meal`);
+ * a wide screen shows the week with `day`'s prep in the panel beside it.
+ */
+export function todoHref(opts: { meal?: Id; day?: ISODate } = {}): string {
+  const q = new URLSearchParams({ show: 'todo' })
+  if (opts.day) {
+    q.set('week', opts.day)
+    q.set('day', opts.day)
+  }
+  if (opts.meal) q.set('meal', opts.meal)
+  return `/?${q.toString()}`
+}
+export const TODO_HREF = todoHref()
+
 /** A hosted run or a single hosted meal. `key` is `MealCard.hostedKey` / `RunSummary.key`. */
 export const hostedHref = (key: string): string => `/hosted/${key}`
 /** The fridge sheet for the same key. */
