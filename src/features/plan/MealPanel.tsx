@@ -15,7 +15,7 @@ import {
   useRemoveMealDish,
   useShopping,
 } from '@/lib/api/hooks'
-import type { DaySlot, Id, MealCard, MealDish } from '@/lib/api/types'
+import type { DaySlot, Id, ISODate, MealCard, MealDish, PrepTask } from '@/lib/api/types'
 import { addDays, clock12, weekdayName } from '@/lib/dates'
 import { PICKABLE_SLOTS, SLOT_LABEL } from '@/lib/plan'
 import { COURSE_LABEL, KIND_LABEL, PLAN } from '@/lib/strings'
@@ -27,6 +27,7 @@ import { recipeHref, usePlanCtx, type Selection } from './PlanContext'
 import { Sheet } from '@/components/Sheet'
 import { ProblemLine } from './Slots'
 import { TaskItem } from './TaskItem'
+import { dayShort, mergeDays } from '../prep/model'
 
 /** `Tomorrow · 7:00 pm · Us · 4`: where the meal sits and who eats. */
 function subtitle(sel: Selection, today: string): string {
@@ -174,7 +175,37 @@ function useDishes(meal: MealCard): MealDish[] {
   return meal.dishes ?? []
 }
 
-function DishRow({ dish, meal }: { dish: MealDish; meal: MealCard }) {
+/** A prep task and the day it is done on. */
+type DatedTask = { task: PrepTask; date: ISODate }
+
+/** The meal's tasks, each under its dish where it has one; the rest (the blech, the eruv) are left over. */
+function tasksByDish(dishes: MealDish[], tasks: DatedTask[]) {
+  const byDish = new Map<string, DatedTask[]>()
+  const rest: DatedTask[] = []
+  for (const t of tasks) {
+    const d =
+      dishes.find((x) => t.task.itemId && x.itemId === t.task.itemId) ??
+      dishes.find((x) => t.task.recipeId && x.recipeId === t.task.recipeId)
+    if (d) byDish.set(d.itemId, [...(byDish.get(d.itemId) ?? []), t])
+    else rest.push(t)
+  }
+  return { byDish, rest }
+}
+
+/** The day before a task's time, when it is not the meal's own day ("Thu 19"). */
+const otherDay = (t: DatedTask, meal: MealCard) =>
+  t.date !== meal.date ? dayShort(t.date) : undefined
+
+/** A dish: its name (the link to its recipe) and, under it, its prep steps to tick off. */
+function DishRow({
+  dish,
+  meal,
+  tasks = [],
+}: {
+  dish: MealDish
+  meal: MealCard
+  tasks?: DatedTask[]
+}) {
   const router = useTabRouter()
   const { close } = usePlanCtx()
   const sub = [
@@ -192,8 +223,9 @@ function DishRow({ dish, meal }: { dish: MealDish; meal: MealCard }) {
       {dish.recipeId ? <Text style={styles.chevron}>{'›'}</Text> : null}
     </>
   )
-  if (!dish.recipeId) return <View style={[styles.dish, styles.dishPlain]}>{body}</View>
-  return (
+  const head = !dish.recipeId ? (
+    <View style={[styles.dish, styles.dishPlain]}>{body}</View>
+  ) : (
     <Pressable
       accessibilityRole="link"
       accessibilityLabel={`Open recipe: ${dish.title}`}
@@ -206,6 +238,17 @@ function DishRow({ dish, meal }: { dish: MealDish; meal: MealCard }) {
       {body}
     </Pressable>
   )
+  if (!tasks.length) return head
+  return (
+    <View style={styles.dishGroup}>
+      {head}
+      <View style={styles.dishTasks}>
+        {tasks.map((t) => (
+          <TaskItem key={t.task.id} task={t.task} inDish day={otherDay(t, meal)} />
+        ))}
+      </View>
+    </View>
+  )
 }
 
 function MealView({ meal }: { meal: MealCard }) {
@@ -216,36 +259,38 @@ function MealView({ meal }: { meal: MealCard }) {
   const slot = slotName(meal).toLowerCase()
   const prep = usePrep()
   const shopping = useShopping()
-  const tasks = (prep.data ?? []).flatMap((d) => d.tasks).filter((t) => t.mealId === meal.id)
+  const tasks = mergeDays(prep.data ?? []).flatMap((d) =>
+    d.tasks.filter((t) => t.mealId === meal.id).map((task) => ({ task, date: d.date })),
+  )
+  const { byDish, rest } = tasksByDish(dishes, tasks)
   const buy = meal.id ? mealShopping(shopping.data, meal.id) : { items: [], buyBy: null }
   return (
     <>
       <View style={styles.list}>
         {dishes.map((d) => (
-          <DishRow key={d.itemId} dish={d} meal={meal} />
+          <DishRow key={d.itemId} dish={d} meal={meal} tasks={byDish.get(d.itemId)} />
         ))}
         <AddDish mealId={meal.id as Id} />
       </View>
       <ProblemLine allergies={meal.problems.allergies} gaps={meal.problems.gaps} />
-      {tasks.length ? (
-        <Section
-          title={PLAN.prep}
-          link={
-            wide
-              ? undefined
-              : {
-                  label: `${PLAN.allPrep} ›`,
-                  onPress: () => {
-                    close()
-                    router.setParams({ show: 'todo', meal: meal.id ?? undefined })
-                  },
-                }
-          }
-        >
-          {tasks.map((t) => (
-            <TaskItem key={t.id} task={t} hideMeal />
+      {rest.length ? (
+        <Section title={PLAN.alsoPrep}>
+          {rest.map((t) => (
+            <TaskItem key={t.task.id} task={t.task} inDish day={otherDay(t, meal)} />
           ))}
         </Section>
+      ) : null}
+      {tasks.length && !wide ? (
+        <Pressable
+          accessibilityRole="link"
+          onPress={() => {
+            close()
+            router.setParams({ show: 'todo', meal: meal.id ?? undefined })
+          }}
+          style={styles.change}
+        >
+          <Text style={styles.link}>{`${PLAN.allPrep} ›`}</Text>
+        </Pressable>
       ) : null}
       {buy.items.length ? (
         <Section
@@ -292,6 +337,16 @@ export function Section({
   )
 }
 
+/** The dashed "+ Add a dish" tile. */
+export function AddTile({ onPress }: { onPress: () => void }) {
+  return (
+    <Pressable accessibilityRole="button" onPress={onPress} style={[styles.dish, styles.addTile]}>
+      <Icon name="plus" size={20} color={colors.accent} />
+      <Text style={[styles.dishTitle, { color: colors.accent }]}>{PLAN.addDish}</Text>
+    </Pressable>
+  )
+}
+
 /** A tile under the dishes: "+ Add a dish" until tapped, then the recipe search; picking adds it straight away. */
 function AddDish({ mealId, startOpen }: { mealId: Id; startOpen?: boolean }) {
   const add = useAddMealDish()
@@ -318,14 +373,7 @@ function AddDish({ mealId, startOpen }: { mealId: Id; startOpen?: boolean }) {
           autoFocus
         />
       ) : (
-        <Pressable
-          accessibilityRole="button"
-          onPress={() => setOpen(true)}
-          style={[styles.dish, styles.addTile]}
-        >
-          <Icon name="plus" size={20} color={colors.accent} />
-          <Text style={[styles.dishTitle, { color: colors.accent }]}>{PLAN.addDish}</Text>
-        </Pressable>
+        <AddTile onPress={() => setOpen(true)} />
       )}
       {error ? (
         <Text color={colors.danger} accessibilityRole="alert">
@@ -402,10 +450,31 @@ function ChangeMeal({ meal }: { meal: MealCard }) {
   )
 }
 
-/** An empty slot: the kind of meal, recipes cooked lately (one tap adds), and a search that starts unfocused. */
 function EmptySlot({ sel }: { sel: Selection }) {
-  const { close, today } = usePlanCtx()
-  const [slot, setSlot] = useState<DaySlot>(sel.slot)
+  const { close } = usePlanCtx()
+  return <AddToDay date={sel.date} slot={sel.slot} onDone={close} />
+}
+
+/**
+ * Add a dish to a day: which meal (the day's dinner unless another is picked), recipes cooked lately (one tap adds),
+ * and a search that starts unfocused. A meal the day already has gets the dish; otherwise the meal is made with it.
+ */
+export function AddToDay({
+  date,
+  slot: start = 'dinner',
+  meals = [],
+  slots = PICKABLE_SLOTS,
+  onDone,
+}: {
+  date: ISODate
+  slot?: DaySlot
+  /** The day's own meals (not hosted ones), to add to rather than make another. */
+  meals?: MealCard[]
+  slots?: DaySlot[]
+  onDone: () => void
+}) {
+  const { today } = usePlanCtx()
+  const [slot, setSlot] = useState<DaySlot>(slots.includes(start) ? start : slots[0])
   const [error, setError] = useState('')
   const [host, setHost] = useState(false)
   const recipes = useRecipes('', {})
@@ -415,12 +484,13 @@ function EmptySlot({ sel }: { sel: Selection }) {
     (recipes.data ?? []).filter((r) => r.course === 'main'),
     5,
   )
+  const have = meals.find((m) => m.slot === slot && m.id && !m.hosted)
   const addDish = async (dish: { versionId?: Id; description?: string }) => {
     setError('')
     try {
-      const m = await create.mutateAsync({ date: sel.date, slot })
-      await add.mutateAsync({ mealId: m.id as Id, dish: { course: 'main', ...dish } })
-      close()
+      const mealId = (have?.id ?? (await create.mutateAsync({ date, slot })).id) as Id
+      await add.mutateAsync({ mealId, dish: { course: 'main', ...dish } })
+      onDone()
     } catch (e) {
       setError((e as Error).message)
     }
@@ -428,7 +498,7 @@ function EmptySlot({ sel }: { sel: Selection }) {
   return (
     <>
       <View style={styles.pills}>
-        {PICKABLE_SLOTS.map((s) => (
+        {slots.map((s) => (
           <Pressable
             key={s}
             accessibilityRole="button"
@@ -442,6 +512,11 @@ function EmptySlot({ sel }: { sel: Selection }) {
           </Pressable>
         ))}
       </View>
+      <Text style={styles.dishSub}>
+        {have
+          ? PLAN.addsTo(slotName(have).toLowerCase(), have.dishes?.length ?? 0)
+          : PLAN.makesNew(SLOT_LABEL[slot].toLowerCase())}
+      </Text>
       {lately.length ? (
         <View style={{ gap: 8 }}>
           <Text style={styles.fieldLabel}>{PLAN.cookedLately}</Text>
@@ -486,10 +561,10 @@ function EmptySlot({ sel }: { sel: Selection }) {
       </Pressable>
       {host ? (
         <DayActions
-          date={sel.date}
+          date={date}
           onClose={() => {
             setHost(false)
-            close()
+            onDone()
           }}
         />
       ) : null}
@@ -532,6 +607,14 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     paddingHorizontal: 14,
     minHeight: 52,
+  },
+  dishGroup: { backgroundColor: colors.subtle, borderRadius: radius.tile, overflow: 'hidden' },
+  dishTasks: {
+    paddingLeft: 14,
+    paddingRight: 10,
+    paddingBottom: 8,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: colors.line,
   },
   dishPlain: { backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.line },
   dishChange: { paddingVertical: 4, paddingRight: 4 },

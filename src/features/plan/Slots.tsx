@@ -95,7 +95,11 @@ export function ColumnMeal({ meal }: { meal: MealCard }) {
       accessibilityRole="button"
       accessibilityLabel={`${slotName(meal)}: ${lead || 'not planned'}${more ? ` and ${more} more` : ''}`}
       onPress={() => openMeal(meal)}
-      style={[styles.col, on && styles.colOn]}
+      style={({ hovered }: { pressed: boolean; hovered?: boolean }) => [
+        styles.col,
+        hovered && styles.colHover,
+        on && styles.colOn,
+      ]}
     >
       <Text style={styles.colSlot} numberOfLines={1}>
         {slotText(meal)}
@@ -134,8 +138,19 @@ const styles = StyleSheet.create({
   slot: { fontFamily: fonts.body, fontSize: 13, color: colors.muted },
   dish: { fontFamily: fonts.bodySemiBold, fontSize: 16, color: colors.ink },
   more: { fontFamily: fonts.body, color: colors.muted },
-  col: { gap: 1, borderRadius: 8, marginHorizontal: -4, paddingHorizontal: 4, paddingVertical: 2 },
-  colOn: { backgroundColor: colors.accentSoft },
+  // A tile, so it reads as something to open rather than a label on the day.
+  col: {
+    gap: 1,
+    borderRadius: 10,
+    marginHorizontal: -4,
+    paddingHorizontal: 8,
+    paddingVertical: 6,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.line,
+  },
+  colHover: { borderColor: colors.accent },
+  colOn: { backgroundColor: colors.accentSoft, borderColor: colors.accent },
   colSlot: { fontFamily: fonts.body, fontSize: 11, color: colors.muted },
   colDish: { fontFamily: fonts.bodySemiBold, fontSize: 14, lineHeight: 18, color: colors.ink },
   colMore: { fontFamily: fonts.body, fontSize: 12, color: colors.muted },

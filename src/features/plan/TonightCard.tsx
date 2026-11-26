@@ -4,7 +4,7 @@ import { Pressable, StyleSheet, View } from 'react-native'
 
 import { Text, useLayout } from '@/components'
 import { Icon } from '@/components/Icon'
-import { usePrep } from '@/lib/api/hooks'
+import { usePrep, useWeek } from '@/lib/api/hooks'
 import type { PlanView } from '@/lib/api/types'
 import { clock12 } from '@/lib/dates'
 import { PLAN } from '@/lib/strings'
@@ -14,8 +14,17 @@ import { clockShort, dishSummary, mainDish, startTime, tonightOf } from './model
 import { usePlanCtx } from './PlanContext'
 import { ProblemLine } from './Slots'
 
-/** The card at the top of the page: tonight's dinner, when to start, and a Cook button. */
-export function TonightCard({ view }: { view: PlanView }) {
+/**
+ * The card at the top of the page: tonight's dinner, when to start, and a Cook button. It reads this week itself, so
+ * it stays on tonight while the week or month on screen is paged.
+ */
+export function TonightCard() {
+  const q = useWeek()
+  if (!q.data) return null
+  return <Tonight view={q.data} />
+}
+
+function Tonight({ view }: { view: PlanView }) {
   const router = useRouter()
   const { phone } = useLayout()
   const { openMeal, addMeal, openEve } = usePlanCtx()

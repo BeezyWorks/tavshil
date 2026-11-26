@@ -13,12 +13,22 @@ import { lowerTime } from '../prep/model'
 
 /**
  * A prep task in a side panel: tick, time, what to do, and quick links to the recipe and cooking mode.
- * `hideMeal` when the panel is already about that meal.
+ * `inDish` when it sits under its dish (the dish is the recipe link, and names the meal); `day` prefixes the
+ * time when the task falls on another day than the meal.
  */
-export function TaskItem({ task: t, hideMeal }: { task: PrepTask; hideMeal?: boolean }) {
+export function TaskItem({
+  task: t,
+  inDish,
+  day,
+}: {
+  task: PrepTask
+  inDish?: boolean
+  day?: string
+}) {
   const router = useTabRouter()
   const set = useSetPrepDone()
-  const recipe = t.recipeId ? () => router.push(`/recipes/${t.recipeId}` as Href) : undefined
+  const recipe =
+    t.recipeId && !inDish ? () => router.push(`/recipes/${t.recipeId}` as Href) : undefined
   const cook =
     t.versionId && t.kind === 'active'
       ? () => router.push(`/cook/${t.versionId}` as Href)
@@ -26,7 +36,7 @@ export function TaskItem({ task: t, hideMeal }: { task: PrepTask; hideMeal?: boo
   const sitting = t.waitUntil ?? (t.passive ? t.endTime : undefined)
   const sub = [
     t.passive || t.waitUntil ? (sitting ? PREP.sitsUntil(lowerTime(sitting)) : PREP.passive) : '',
-    hideMeal ? '' : t.mealName,
+    inDish ? '' : t.mealName,
   ].filter(Boolean)
   return (
     <View style={styles.row}>
@@ -36,35 +46,39 @@ export function TaskItem({ task: t, hideMeal }: { task: PrepTask; hideMeal?: boo
         onChange={(done) => set.mutate([{ key: t.id, done }])}
       />
       <View style={styles.body}>
-        <View style={styles.line}>
-          <Text style={[styles.time, !t.done && styles.timeOn]}>{lowerTime(t.time)}</Text>
-          <Text style={[styles.text, t.done && styles.done]}>{t.text}</Text>
+        <Text style={[styles.time, !t.done && styles.timeOn]}>
+          {day ? `${day}\n${lowerTime(t.time)}` : lowerTime(t.time)}
+        </Text>
+        <View style={styles.main}>
+          <Text style={[styles.text, t.done && styles.done]}>
+            {inDish && t.label ? t.label : t.text}
+          </Text>
+          {sub.length ? <Text style={styles.sub}>{sub.join(' · ')}</Text> : null}
+          {recipe || cook ? (
+            <View style={styles.links}>
+              {recipe ? (
+                <Pressable
+                  accessibilityRole="link"
+                  accessibilityLabel={`${PLAN.recipe}: ${t.dish || t.text}`}
+                  onPress={recipe}
+                  hitSlop={8}
+                >
+                  <Text style={styles.link}>{`${PLAN.recipe} ›`}</Text>
+                </Pressable>
+              ) : null}
+              {cook ? (
+                <Pressable
+                  accessibilityRole="link"
+                  accessibilityLabel={`${PLAN.cook}: ${t.dish || t.text}`}
+                  onPress={cook}
+                  hitSlop={8}
+                >
+                  <Text style={styles.link}>{`${PLAN.cook} ›`}</Text>
+                </Pressable>
+              ) : null}
+            </View>
+          ) : null}
         </View>
-        {sub.length ? <Text style={styles.sub}>{sub.join(' · ')}</Text> : null}
-        {recipe || cook ? (
-          <View style={styles.links}>
-            {recipe ? (
-              <Pressable
-                accessibilityRole="link"
-                accessibilityLabel={`${PLAN.recipe}: ${t.dish || t.text}`}
-                onPress={recipe}
-                hitSlop={8}
-              >
-                <Text style={styles.link}>{`${PLAN.recipe} ›`}</Text>
-              </Pressable>
-            ) : null}
-            {cook ? (
-              <Pressable
-                accessibilityRole="link"
-                accessibilityLabel={`${PLAN.cook}: ${t.dish || t.text}`}
-                onPress={cook}
-                hitSlop={8}
-              >
-                <Text style={styles.link}>{`${PLAN.cook} ›`}</Text>
-              </Pressable>
-            ) : null}
-          </View>
-        ) : null}
       </View>
     </View>
   )
@@ -72,13 +86,13 @@ export function TaskItem({ task: t, hideMeal }: { task: PrepTask; hideMeal?: boo
 
 const styles = StyleSheet.create({
   row: { flexDirection: 'row', alignItems: 'flex-start', gap: 4 },
-  body: { flex: 1, minWidth: 0, gap: 2, paddingTop: 11 },
-  line: { flexDirection: 'row', gap: 8, alignItems: 'baseline' },
-  time: { width: 58, fontFamily: fonts.body, fontSize: 13, color: colors.muted },
+  body: { flex: 1, minWidth: 0, flexDirection: 'row', gap: 8, paddingTop: 11 },
+  main: { flex: 1, minWidth: 0, gap: 2 },
+  time: { width: 58, fontFamily: fonts.body, fontSize: 13, lineHeight: 20, color: colors.muted },
   timeOn: { color: colors.ink, fontFamily: fonts.bodySemiBold },
-  text: { flex: 1, fontFamily: fonts.bodySemiBold, fontSize: 15, color: colors.ink },
+  text: { fontFamily: fonts.bodySemiBold, fontSize: 15, lineHeight: 20, color: colors.ink },
   done: { textDecorationLine: 'line-through', color: colors.muted },
-  sub: { marginLeft: 66, fontFamily: fonts.body, fontSize: 13, color: colors.muted },
-  links: { marginLeft: 66, flexDirection: 'row', gap: 16, paddingTop: 2 },
+  sub: { fontFamily: fonts.body, fontSize: 13, color: colors.muted },
+  links: { flexDirection: 'row', gap: 16, paddingTop: 2 },
   link: { fontFamily: fonts.bodySemiBold, fontSize: 13, color: colors.accent },
 })

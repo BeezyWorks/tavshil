@@ -115,7 +115,11 @@ export const PLAN = {
   recipe: 'Recipe',
   meals: 'Meals',
   todo: 'To do',
-  allPrep: 'All prep',
+  allPrep: 'All prep, by day',
+  alsoPrep: 'Also to do',
+  addsTo: (slot: string, n: number) =>
+    `Adds to this ${slot}${n ? ` (${n} ${n === 1 ? 'dish' : 'dishes'} so far)` : ''}`,
+  makesNew: (slot: string) => `Starts a ${slot} on this day`,
   nothingToPrep: 'Nothing to prep this day.',
   today: 'Today',
   noRecipe: 'No recipe',

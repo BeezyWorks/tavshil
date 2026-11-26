@@ -2,7 +2,7 @@ import React, { useMemo, useState } from 'react'
 import { Pressable, StyleSheet, View } from 'react-native'
 
 import { Card, Loading, Text, useLayout } from '@/components'
-import { usePlan, useToday } from '@/lib/api/hooks'
+import { usePlan } from '@/lib/api/hooks'
 import type { ISODate, RunSummary, WeekDay } from '@/lib/api/types'
 import {
   dayNum,
@@ -17,54 +17,96 @@ import { PLAN } from '@/lib/strings'
 import { colors, fonts, radius, space } from '@/theme/tokens'
 
 import { hebrewMonthsLabel, holyMeals } from './model'
+import { Pager } from './Pager'
 import { usePlanCtx } from './PlanContext'
-import { PlanHeader, type Go } from './PlanHeader'
+import { type Go, type HeaderProps } from './PlanHeader'
 import { PhoneMeal } from './Slots'
 
 const WEEKDAYS = ['S', 'M', 'T', 'W', 'T', 'F', 'שבת']
 const WEEKDAYS_LONG = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'שבת']
 
-/** The month as a Calendar-style grid (a dot per meal); tapping a day lists its meals below. */
-export function MonthView({ anchor, go }: { anchor?: ISODate; go: Go }) {
-  const today = useToday()
-  const base = anchor ?? today
-  if (!base || !today) return <Loading />
-  return <Month base={base} today={today} go={go} />
-}
-
-function Month({ base, today, go }: { base: ISODate; today: ISODate; go: Go }) {
-  const { phone } = useLayout()
+/** The header for the month holding `base`. */
+export function monthHeader(base: ISODate, today: ISODate): HeaderProps {
   const d = toDate(base)
   const y = d.getUTCFullYear()
   const m = d.getUTCMonth()
+  const monthDays = monthGrid(y, m).filter((x) => toDate(x).getUTCMonth() === m)
+  return {
+    view: 'month',
+    kicker: hebrewMonthsLabel(monthDays[0], monthDays[monthDays.length - 1]),
+    title: `${monthName(m)}${y !== toDate(today).getUTCFullYear() ? ` ${y}` : ''}`,
+    week: base,
+    today,
+    current: toDate(today).getUTCFullYear() === y && toDate(today).getUTCMonth() === m,
+  }
+}
+
+/** The month as a Calendar-style grid (a dot per meal), paged; tapping a day lists its meals below. */
+export function MonthBody({ base, today, go }: { base: ISODate; today: ISODate; go: Go }) {
+  const d = toDate(base)
+  const index = d.getUTCFullYear() * 12 + d.getUTCMonth()
+  const [picked, setPicked] = useState<ISODate | null>(null)
+  return (
+    <Pager
+      index={index}
+      onPage={(n) => go({ week: firstOfMonth(index + n), view: 'month' })}
+      renderPage={(i) => (
+        <MonthPage
+          y={Math.floor(i / 12)}
+          m={i % 12}
+          today={today}
+          picked={picked}
+          setPicked={setPicked}
+        />
+      )}
+    />
+  )
+}
+
+/** Where the row holding `date` sits in its month's grid, from the top of the grid: the point week ↔ month zooms on. */
+export function monthRowCenter(date: ISODate, phone: boolean): number {
+  const d = toDate(date)
+  const grid = monthGrid(d.getUTCFullYear(), d.getUTCMonth())
+  const row = Math.max(0, Math.floor(grid.indexOf(date) / 7))
+  const cell = phone ? 58 : 84
+  return 10 + 19 + row * (cell + 2) + cell / 2
+}
+
+const firstOfMonth = (i: number): ISODate =>
+  `${Math.floor(i / 12)}-${String((i % 12) + 1).padStart(2, '0')}-01`
+
+/** One month's grid and the picked day's meals; the pager renders the months either side too. */
+function MonthPage({
+  y,
+  m,
+  today,
+  picked,
+  setPicked,
+}: {
+  y: number
+  m: number
+  today: ISODate
+  picked: ISODate | null
+  setPicked: (d: ISODate) => void
+}) {
+  const { phone } = useLayout()
   const grid = useMemo(() => monthGrid(y, m), [y, m])
   // Five rows are enough when the sixth is all next month.
   const rows = toDate(grid[35]).getUTCMonth() === m ? 6 : 5
   const days = grid.slice(0, rows * 7)
   const q = usePlan(grid[0], grid[grid.length - 1])
-  const runs = q.data?.runs ?? []
-  const byDate = new Map((q.data?.days ?? []).map((x) => [x.date, x]))
+  const data = q.isPlaceholderData ? undefined : q.data
+  const runs = data?.runs ?? []
+  const byDate = new Map((data?.days ?? []).map((x) => [x.date, x]))
   const inThisMonth = toDate(today).getUTCFullYear() === y && toDate(today).getUTCMonth() === m
-  const [picked, setPicked] = useState<ISODate | null>(null)
   const sel =
     picked && days.includes(picked) && toDate(picked).getUTCMonth() === m
       ? picked
       : inThisMonth
         ? today
         : grid.find((x) => toDate(x).getUTCMonth() === m)!
-  const monthDays = days.filter((x) => toDate(x).getUTCMonth() === m)
-  const title = `${monthName(m)}${y !== toDate(today).getUTCFullYear() ? ` ${y}` : ''}`
   return (
-    <View style={styles.page}>
-      <PlanHeader
-        view="month"
-        kicker={hebrewMonthsLabel(monthDays[0], monthDays[monthDays.length - 1])}
-        title={title}
-        week={base}
-        today={today}
-        current={inThisMonth}
-        go={go}
-      />
+    <View style={{ gap: space.lg }}>
       {q.error ? (
         <Card tone="danger">
           <Text color={colors.danger}>{(q.error as Error).message}</Text>
@@ -100,11 +142,7 @@ function Month({ base, today, go }: { base: ISODate; today: ISODate; go: Go }) {
           </View>
         ))}
       </View>
-      {q.isLoading ? (
-        <Loading />
-      ) : (
-        <DayList date={sel} day={byDate.get(sel)} today={today} runs={runs} />
-      )}
+      {!data ? <Loading /> : <DayList date={sel} day={byDate.get(sel)} today={today} runs={runs} />}
     </View>
   )
 }
@@ -247,7 +285,6 @@ function DayList({
 }
 
 const styles = StyleSheet.create({
-  page: { gap: space.lg },
   calendar: {
     backgroundColor: colors.surface,
     borderRadius: radius.group,

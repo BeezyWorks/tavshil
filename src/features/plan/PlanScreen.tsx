@@ -1,22 +1,24 @@
-import { useLocalSearchParams, useRouter, type Href } from 'expo-router'
+import { useLocalSearchParams, useRouter } from 'expo-router'
 import React, { useEffect, useState } from 'react'
 import { StyleSheet, View } from 'react-native'
+import Animated, { FadeIn, FadeOut } from 'react-native-reanimated'
 
 import { Loading, Screen, Segmented, useLayout } from '@/components'
 import { PrepActions } from '@/features/prep/PrepActions'
 import { TodoList } from '@/features/prep/TodoList'
 import { useToday, useWeek } from '@/lib/api/hooks'
 import type { ISODate, MealCard, RunSummary, WeekDay } from '@/lib/api/types'
-import { planHref } from '@/lib/plan'
 import { PLAN } from '@/lib/strings'
 import { space } from '@/theme/tokens'
 
 import { DaySide } from './DayPanel'
 import { MealSheet, MealSide } from './MealPanel'
-import { holyMeals } from './model'
-import { MonthView } from './MonthView'
+import { MonthBody, monthHeader, monthRowCenter } from './MonthView'
 import { PlanProvider, type Selection } from './PlanContext'
-import { WeekView } from './WeekView'
+import { PlanHeader } from './PlanHeader'
+import { TonightCard } from './TonightCard'
+import { useWeekHeader, WeekBody } from './WeekView'
+import { ZoomSwitch } from './ZoomSwitch'
 
 const isDate = (s?: string): s is ISODate => !!s && /^\d{4}-\d{2}-\d{2}$/.test(s)
 
@@ -41,11 +43,14 @@ export function PlanScreen() {
   const week = isDate(params.week) ? params.week : undefined
   const month = params.view === 'month'
   const todo = !wide && params.show === 'todo'
-  const go = (o: { week?: ISODate; view?: 'week' | 'month' }) => router.replace(planHref(o) as Href)
+  // Paging and the toggle change the params in place, so the Plan tab stays one page.
+  const go = (o: { week?: ISODate; view?: 'week' | 'month' }) =>
+    router.setParams({ week: o.week, view: o.view === 'month' ? 'month' : undefined })
   const today = useToday()
   const [selected, setSelected] = useState<Selection | null>(null)
   const [pickedDay, setDay] = useState<ISODate | null>(null)
   const weekQ = useWeek(week)
+  const weekHead = useWeekHeader(week)
 
   // A link to a day's prep ("Prep" on a hosted page) picks that day beside the week.
   useEffect(() => {
@@ -64,13 +69,10 @@ export function PlanScreen() {
   }, [params.edit, weekQ.data, router])
 
   if (!today) return <Screen>{<Loading />}</Screen>
+  // The day week ↔ month keeps in view: the week on screen, or today.
+  const focus = week ?? today
   const day = pickedDay ?? today
   const weekDay = weekQ.data?.days.find((d) => d.date === day)
-  const dayMeals = weekDay
-    ? weekDay.holyDay
-      ? holyMeals(weekDay, weekQ.data!.runs)
-      : weekDay.meals
-    : []
   return (
     <PlanProvider
       today={today}
@@ -100,22 +102,39 @@ export function PlanScreen() {
         {todo ? (
           <TodoList meal={params.meal} />
         ) : (
-          <View style={wide ? styles.row : undefined}>
-            <View style={styles.main}>
-              {month ? <MonthView anchor={week} go={go} /> : <WeekView week={week} go={go} />}
-            </View>
-            {wide && !month ? (
-              <View style={styles.side}>
-                {selected ? (
-                  <MealSide
-                    key={`${selected.date}${selected.slot}${selected.meal?.id ?? ''}`}
-                    sel={selected}
-                  />
-                ) : (
-                  <DaySide date={day} day={weekDay} meals={dayMeals} />
-                )}
+          <View style={styles.stack}>
+            <PlanHeader {...(month ? monthHeader(focus, today) : weekHead)} go={go} />
+            <TonightCard />
+            <View style={wide ? styles.row : undefined}>
+              <View style={styles.main}>
+                <ZoomSwitch
+                  mode={month ? 'month' : 'week'}
+                  origin={{ month: monthRowCenter(focus, !wide), week: wide ? 180 : 120 }}
+                >
+                  {month ? (
+                    <MonthBody base={focus} today={today} go={go} />
+                  ) : (
+                    <WeekBody week={week} go={go} />
+                  )}
+                </ZoomSwitch>
               </View>
-            ) : null}
+              {wide && !month ? (
+                <Animated.View
+                  entering={FadeIn.duration(360).delay(80)}
+                  exiting={FadeOut.duration(200)}
+                  style={styles.side}
+                >
+                  {selected ? (
+                    <MealSide
+                      key={`${selected.date}${selected.slot}${selected.meal?.id ?? ''}`}
+                      sel={selected}
+                    />
+                  ) : (
+                    <DaySide date={day} day={weekDay} />
+                  )}
+                </Animated.View>
+              ) : null}
+            </View>
           </View>
         )}
       </Screen>
@@ -140,6 +159,7 @@ function findMeal(days: WeekDay[], runs: RunSummary[], id: string): MealCard | n
 }
 
 const styles = StyleSheet.create({
+  stack: { gap: space.lg },
   row: { flexDirection: 'row', alignItems: 'flex-start', gap: 28 },
   main: { flex: 1, minWidth: 0, gap: space.lg },
   side: { flexShrink: 0, alignSelf: 'flex-start', maxHeight: '100%' },

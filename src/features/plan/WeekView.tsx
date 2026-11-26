@@ -4,7 +4,7 @@ import { Pressable, StyleSheet, View } from 'react-native'
 import { Card, Loading, Text, useLayout } from '@/components'
 import { usePrep, useWeek } from '@/lib/api/hooks'
 import type { ISODate, MealCard, PlanView, PrepDay, RunSummary, WeekDay } from '@/lib/api/types'
-import { clockMinutes, dayNum, weekdayName } from '@/lib/dates'
+import { addDays, clockMinutes, dayNum, toDate, weekdayName } from '@/lib/dates'
 import { PLAN } from '@/lib/strings'
 import { colors, fonts, radius, space } from '@/theme/tokens'
 
@@ -18,52 +18,76 @@ import {
   runMealLabels,
   type Segment,
 } from './model'
+import { Pager } from './Pager'
 import { usePlanCtx } from './PlanContext'
-import { PlanHeader, rangeLabel, type Go } from './PlanHeader'
+import { rangeLabel, type Go, type HeaderProps } from './PlanHeader'
 import { ColumnMeal, PhoneMeal } from './Slots'
-import { TonightCard } from './TonightCard'
 
-/** The Plan tab's week: header, tonight card, then the days (a grouped list on phones, seven columns when wide). */
-export function WeekView({ week, go }: { week?: ISODate; go: Go }) {
+/** The header for the week on screen: `This week` or its dates, and whether it holds today. */
+export function useWeekHeader(week?: ISODate): HeaderProps {
+  const view = useWeek(week).data
+  return {
+    view: 'week',
+    kicker: view ? headerKicker(view) : undefined,
+    title: view
+      ? isThisWeek(view)
+        ? PLAN.thisWeek
+        : rangeLabel(view.from, view.to, view.today)
+      : '',
+    week: view?.from,
+    today: view?.today,
+    current: view ? isThisWeek(view) : true,
+  }
+}
+
+/** The Plan tab's week: the days, paged (a grouped list on phones, seven columns when wide). */
+export function WeekBody({ week, go }: { week?: ISODate; go: Go }) {
   const { wide } = useLayout()
   const q = useWeek(week)
   const view = q.data
   const prep = usePrep()
+  if (q.error)
+    return (
+      <Card tone="danger">
+        <Text color={colors.danger}>{(q.error as Error).message}</Text>
+      </Card>
+    )
+  if (!view) return <Loading />
   return (
-    <View style={styles.page}>
-      <PlanHeader
-        view="week"
-        kicker={view ? headerKicker(view) : undefined}
-        title={
-          view
-            ? isThisWeek(view)
-              ? PLAN.thisWeek
-              : rangeLabel(view.from, view.to, view.today)
-            : ''
-        }
-        week={view?.from}
-        today={view?.today}
-        current={view ? isThisWeek(view) : true}
-        go={go}
-      />
-      {q.error ? (
-        <Card tone="danger">
-          <Text color={colors.danger}>{(q.error as Error).message}</Text>
-        </Card>
-      ) : !view ? (
-        <Loading />
-      ) : (
-        <>
-          <TonightCard view={view} />
-          {wide ? (
-            <WideWeek view={view} prep={prep.data ?? []} />
-          ) : (
-            <PhoneWeek view={view} prep={prep.data ?? []} />
-          )}
-        </>
+    <Pager
+      index={weekIndex(view.from)}
+      onPage={(d) => go({ week: addDays(view.from, 7 * d) })}
+      renderPage={(i) => (
+        <WeekPage
+          from={addDays(view.from, 7 * (i - weekIndex(view.from)))}
+          fallback={i === weekIndex(view.from) ? view : undefined}
+          wide={wide}
+          prep={prep.data ?? []}
+        />
       )}
-    </View>
+    />
   )
+}
+
+/** Weeks numbered from the epoch, for the pager. */
+const weekIndex = (from: ISODate) => Math.round(toDate(from).getTime() / (7 * 86_400_000))
+
+/** One week's days; the pager renders the weeks either side too, so they are loaded before they slide in. */
+function WeekPage({
+  from,
+  fallback,
+  wide,
+  prep,
+}: {
+  from: ISODate
+  fallback?: PlanView
+  wide: boolean
+  prep: PrepDay[]
+}) {
+  const q = useWeek(from)
+  const view = q.data && q.data.from === from ? q.data : fallback
+  if (!view) return <View style={styles.pageLoading} />
+  return wide ? <WideWeek view={view} prep={prep} /> : <PhoneWeek view={view} prep={prep} />
 }
 
 // ---- Phone ----
@@ -252,7 +276,7 @@ function Column({
   prep: PrepDay[]
   labels: Map<string, string>
 }) {
-  const { addMeal, openEve, selectDay, day: picked, selected } = usePlanCtx()
+  const { openEve, selectDay, day: picked, selected } = usePlanCtx()
   const today = day.date === view.today
   const holy = !!day.holyDay
   const on = !selected && picked === day.date
@@ -269,24 +293,28 @@ function Column({
   const tint = today ? colors.todayTint : holy ? colors.holyTint : undefined
   const accent = today ? colors.accent : holy ? colors.info : undefined
   return (
-    <View
-      accessibilityLabel={`${weekdayName(day.date)} ${dayNum(day.date)}`}
-      style={[styles.column, !last && styles.columnRule, tint && { backgroundColor: tint }]}
+    // The whole column picks the day for the panel beside the week; its meals and "+ Meal" keep their own taps.
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={`${weekdayName(day.date)} ${dayNum(day.date)}: show the day's prep`}
+      accessibilityState={{ selected: on }}
+      onPress={() => selectDay(day.date)}
+      style={({ hovered }: { pressed: boolean; hovered?: boolean }) => [
+        styles.column,
+        !last && styles.columnRule,
+        tint && { backgroundColor: tint },
+        hovered && !on && styles.columnHover,
+      ]}
     >
-      <Pressable
-        accessibilityRole="button"
-        accessibilityLabel={`Show prep for ${weekdayName(day.date)} ${dayNum(day.date)}`}
-        accessibilityState={{ selected: on }}
-        onPress={() => selectDay(day.date)}
-        style={[styles.colHead, on && styles.colHeadOn]}
-      >
+      {on ? <View pointerEvents="none" style={styles.columnOn} /> : null}
+      <View>
         <Text
           style={[styles.colLabel, accent && { color: accent, fontFamily: fonts.bodySemiBold }]}
         >
           {today ? 'Today' : holy ? day.holyDay!.label : weekdayName(day.date, true)}
         </Text>
         <Text style={[styles.colNum, accent && { color: accent }]}>{dayNum(day.date)}</Text>
-      </Pressable>
+      </View>
       {meals.map((m) => (
         <ColumnMeal key={m.id ?? `${m.date}-${m.slot}`} meal={m} />
       ))}
@@ -304,28 +332,14 @@ function Column({
           {h.name}
         </Text>
       ))}
-      {note ? (
-        <Pressable accessibilityRole="button" onPress={() => selectDay(day.date)}>
-          <Text style={styles.colNote}>{note}</Text>
-        </Pressable>
-      ) : null}
+      {note ? <Text style={styles.colNote}>{note}</Text> : null}
       <View style={{ flexGrow: 1 }} />
-      {day.eve ? null : (
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel={`Add a meal on ${weekdayName(day.date)} ${dayNum(day.date)}`}
-          onPress={() => addMeal(day.date, holy ? 'lunch' : 'dinner')}
-          style={styles.addMeal}
-        >
-          <Text style={styles.addMealText}>{PLAN.addMeal}</Text>
-        </Pressable>
-      )}
-    </View>
+    </Pressable>
   )
 }
 
 const styles = StyleSheet.create({
-  page: { gap: space.lg },
+  pageLoading: { minHeight: 360 },
   phone: { gap: space.sm },
   group: { backgroundColor: colors.surface, borderRadius: 16, overflow: 'hidden' },
   hair: { height: StyleSheet.hairlineWidth, backgroundColor: colors.separator, marginLeft: 66 },
@@ -364,14 +378,17 @@ const styles = StyleSheet.create({
   },
   column: { flex: 1, minWidth: 0, paddingVertical: 14, paddingHorizontal: 12, gap: 12 },
   columnRule: { borderRightWidth: StyleSheet.hairlineWidth, borderRightColor: colors.separator },
-  colHead: {
-    marginHorizontal: -6,
-    marginTop: -4,
-    paddingHorizontal: 6,
-    paddingVertical: 4,
-    borderRadius: 8,
+  columnHover: { backgroundColor: colors.wash },
+  columnOn: {
+    position: 'absolute',
+    top: 0,
+    right: 0,
+    bottom: 0,
+    left: 0,
+    borderWidth: 2,
+    borderColor: colors.accent,
+    borderRadius: 4,
   },
-  colHeadOn: { backgroundColor: colors.wash },
   colLabel: { fontFamily: fonts.body, fontSize: 12, color: colors.muted },
   colNum: { fontFamily: fonts.bodySemiBold, fontSize: 20, color: colors.ink },
   colNote: { fontFamily: fonts.body, fontSize: 12, color: colors.muted },

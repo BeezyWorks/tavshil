@@ -1,38 +1,41 @@
 import { type Href } from 'expo-router'
-import React, { useMemo } from 'react'
+import React, { useEffect, useMemo, useState } from 'react'
 import { StyleSheet, View } from 'react-native'
 
 import { Text } from '@/components'
 import { usePantry, usePrep, useShopping } from '@/lib/api/hooks'
-import type { ISODate, MealCard, WeekDay } from '@/lib/api/types'
+import type { ISODate, WeekDay } from '@/lib/api/types'
 import { weekdayName } from '@/lib/dates'
+import { PICKABLE_SLOTS } from '@/lib/plan'
 import { PLAN } from '@/lib/strings'
 import { useTabRouter } from '@/lib/tabRoute'
 import { colors, fonts } from '@/theme/tokens'
 
 import { mergeDays } from '../prep/model'
 import { RestLine } from '../prep/TodoList'
-import { CloseButton, Section, SidePanel } from './MealPanel'
+import { AddTile, AddToDay, CloseButton, Section, SidePanel } from './MealPanel'
 import { buyCounts, dayLabel } from './model'
 import { usePlanCtx } from './PlanContext'
-import { PhoneMeal } from './Slots'
 import { TaskItem } from './TaskItem'
 
 /**
- * Wide: the panel beside the week when no meal is open. One day (today until another is clicked):
- * its meals, the prep done that day with links into each recipe and cooking mode, and what is left to buy.
+ * Wide: the panel beside the week when no meal is open. One day (today until another is clicked) as a timeline:
+ * the prep done that day, in time order across its meals, with links into each recipe and cooking mode, then what
+ * is left to buy. The meals themselves are in the week beside it; a meal's panel is organised by dish instead.
  */
 export function DaySide({
   date,
   day,
-  meals,
 }: {
   date: ISODate
   /** The day in the week shown, when it is in view. */
   day?: WeekDay
-  meals: MealCard[]
 }) {
   const { today, selectDay } = usePlanCtx()
+  const [adding, setAdding] = useState(false)
+  useEffect(() => setAdding(false), [date])
+  // Friday night and erev Yom Tov dinners belong to the holy day.
+  const slots = day?.eve ? PICKABLE_SLOTS.filter((s) => s !== 'dinner') : PICKABLE_SLOTS
   const prep = usePrep()
   const pday = useMemo(
     () => mergeDays(prep.data ?? []).find((d) => d.date === date),
@@ -60,13 +63,24 @@ export function DaySide({
         )
       }
     >
-      {meals.length ? (
-        <View style={styles.meals}>
-          {meals.map((m) => (
-            <PhoneMeal key={m.id ?? `${m.date}-${m.slot}`} meal={m} />
-          ))}
+      {adding ? (
+        <View style={styles.adding}>
+          <View style={styles.addHead}>
+            <Text style={styles.addTitle}>{PLAN.addDish}</Text>
+            <CloseButton label={PLAN.close} onPress={() => setAdding(false)} />
+          </View>
+          <AddToDay
+            key={date}
+            date={date}
+            meals={day?.meals ?? []}
+            slots={slots}
+            slot={day?.holyDay ? 'lunch' : 'dinner'}
+            onDone={() => setAdding(false)}
+          />
         </View>
-      ) : null}
+      ) : (
+        <AddTile onPress={() => setAdding(true)} />
+      )}
       <Section title={PLAN.prep}>
         {pday?.tasks.length ? (
           pday.tasks.map((t) => <TaskItem key={t.id} task={t} />)
@@ -119,7 +133,9 @@ function Row({ label, value }: { label: string; value: number }) {
 }
 
 const styles = StyleSheet.create({
-  meals: { gap: 8 },
+  adding: { gap: 12 },
+  addHead: { flexDirection: 'row', alignItems: 'center' },
+  addTitle: { flex: 1, fontFamily: fonts.bodySemiBold, fontSize: 16, color: colors.ink },
   small: { fontFamily: fonts.body, fontSize: 14, color: colors.muted },
   row: { flexDirection: 'row' },
   rowText: { flex: 1, fontFamily: fonts.body, fontSize: 15, color: colors.ink },

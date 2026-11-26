@@ -9,6 +9,8 @@ import { useFonts } from 'expo-font'
 import { Stack } from 'expo-router'
 import { StatusBar } from 'expo-status-bar'
 import React, { useEffect, useRef, useState } from 'react'
+import { StyleSheet } from 'react-native'
+import { GestureHandlerRootView } from 'react-native-gesture-handler'
 
 import { refreshAccount, useAccount } from '@/features/account/store'
 import { configureNotifications, useTimerTapRouting } from '@/features/cook/notifications'
@@ -63,12 +65,14 @@ export default function RootLayout() {
 
   if (!fontsReady && !fontError) return null
   return (
-    <PersistQueryClientProvider client={client} persistOptions={persistOptions}>
-      <StatusBar style="dark" />
-      <Stack
-        screenOptions={{ headerShown: false, contentStyle: { backgroundColor: colors.ground } }}
-      />
-      <TimerTapRouting />
-    </PersistQueryClientProvider>
+    <GestureHandlerRootView style={StyleSheet.absoluteFill}>
+      <PersistQueryClientProvider client={client} persistOptions={persistOptions}>
+        <StatusBar style="dark" />
+        <Stack
+          screenOptions={{ headerShown: false, contentStyle: { backgroundColor: colors.ground } }}
+        />
+        <TimerTapRouting />
+      </PersistQueryClientProvider>
+    </GestureHandlerRootView>
   )
 }
