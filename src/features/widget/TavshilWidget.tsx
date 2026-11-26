@@ -20,7 +20,7 @@ import type { WidgetSnapshot } from './model'
  * declared inside the function or arrives in props (see `WidgetSnapshot`).
  *
  * Small: what you cook next, tap to cook. Medium: that card with a Cook button, and the next few prep tasks.
- * Large: the card and the rest of today's prep.
+ * Large: the card and the next five prep tasks.
  */
 const TavshilWidget = (props: WidgetSnapshot, environment: WidgetEnvironment) => {
   'widget'
@@ -52,7 +52,7 @@ const TavshilWidget = (props: WidgetSnapshot, environment: WidgetEnvironment) =>
     </Link>
   )
 
-  const card = (
+  const cardBody = (
     <HStack
       alignment="center"
       spacing={10}
@@ -89,6 +89,8 @@ const TavshilWidget = (props: WidgetSnapshot, environment: WidgetEnvironment) =>
       {!small && next?.cookUrl ? cookButton(next.cookUrl) : null}
     </HStack>
   )
+  // Medium and large: tapping the card opens that meal on the plan; the Cook button inside wins over it.
+  const card = !small && next ? <Link destination={next.url}>{cardBody}</Link> : cardBody
 
   const task = (t: WidgetSnapshot['prep']['tasks'][number], i: number) => (
     <HStack key={`t${i}`} alignment="center" spacing={8}>
@@ -102,7 +104,7 @@ const TavshilWidget = (props: WidgetSnapshot, environment: WidgetEnvironment) =>
           font({ weight: t.done ? 'regular' : 'semibold', size: 13 }),
           monospacedDigit(),
           foregroundStyle(t.done ? muted : accent),
-          frame({ width: 58, alignment: 'leading' }),
+          frame({ width: 66, alignment: 'leading' }),
         ]}
       >
         {t.time}
@@ -135,11 +137,13 @@ const TavshilWidget = (props: WidgetSnapshot, environment: WidgetEnvironment) =>
   )
 
   const prepList = () => {
-    const rows = big ? 7 : 2
+    // Rows that fit under the card: each large row is two lines (task and its sub), so five fills a large
+    // widget. More rows overflow and SwiftUI centres the stack, clipping the card at the top.
+    const rows = big ? 5 : 2
     const shown = tasks.slice(0, rows)
     const more = tasks.length - shown.length
     return (
-      <VStack alignment="leading" spacing={big ? 9 : 6}>
+      <VStack alignment="leading" spacing={big ? 7 : 6}>
         <HStack>
           <Text modifiers={[font({ weight: 'bold', size: 12 }), foregroundStyle(muted)]}>
             {left ? `PREP TODAY · ${left} LEFT` : 'PREP TODAY'}

@@ -25,6 +25,8 @@ export interface WidgetSnapshot {
     sub: string
     /** Cooking mode for the main dish; null when it has no recipe. */
     cookUrl: string | null
+    /** The plan with this meal open (wide) or its To do (phone). */
+    url: string
   } | null
   /** Today's prep, time order. `left` counts the ones not ticked off. */
   prep: {
@@ -89,6 +91,7 @@ export function buildSnapshot(input: {
       title: main?.title || meal.name,
       sub: [start ? `Start at ${clockShort(start)}` : '', people].filter(Boolean).join(' · '),
       cookUrl: cookUrl(main?.versionId),
+      url: `tavshil://?show=todo&meal=${meal.id}`,
     }
   }
 

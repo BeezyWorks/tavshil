@@ -27,7 +27,8 @@ const isDate = (s?: string): s is ISODate => !!s && /^\d{4}-\d{2}-\d{2}$/.test(s
  * and prep by when it is done. Wide, the prep is a panel beside the week: a day (today until another day's heading
  * is clicked) or the open meal. A phone switches between them with Meals | To do.
  * URL: `/?week=YYYY-MM-DD&view=month`; `&show=todo` (phone: the To do view, `&meal=<id>` narrows it; wide: `&day=`
- * picks the day beside the week); `&edit=<mealId>` opens that meal in change mode (the recipe page's "Change").
+ * picks the day beside the week, `&meal=<id>` opens that meal beside it); `&edit=<mealId>` opens that meal in change
+ * mode (the recipe page's "Change"). The home-screen widget's meal card links to `?show=todo&meal=<id>`.
  */
 export function PlanScreen() {
   const params = useLocalSearchParams<{
@@ -67,6 +68,14 @@ export function PlanScreen() {
     router.setParams({ edit: undefined })
     if (meal) setSelected({ date: meal.date, slot: meal.slot, meal, change: true })
   }, [params.edit, weekQ.data, router])
+
+  // Wide: a link to a meal (the widget's meal card) opens it beside the week. A phone keeps `meal` for To do.
+  useEffect(() => {
+    if (!wide || !params.meal || !weekQ.data) return
+    const meal = findMeal(weekQ.data.days, weekQ.data.runs, params.meal)
+    router.setParams({ meal: undefined, show: undefined })
+    if (meal) setSelected({ date: meal.date, slot: meal.slot, meal, change: false })
+  }, [wide, params.meal, weekQ.data, router])
 
   if (!today) return <Screen>{<Loading />}</Screen>
   // The day week ↔ month keeps in view: the week on screen, or today.

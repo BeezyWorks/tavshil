@@ -98,6 +98,7 @@ describe('buildSnapshot', () => {
       title: 'Silan chicken',
       sub: 'Start at 3:00 · 6 people',
       cookUrl: 'tavshil://cook/v9',
+      url: 'tavshil://?show=todo&meal=m1',
     })
     expect(s.prep.tasks.map((t) => t.text)).toEqual(['Rise', 'Roast', 'Marinate'])
     expect(s.prep.tasks[0]).toMatchObject({
