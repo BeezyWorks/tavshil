@@ -1,11 +1,12 @@
 import type { NutritionGoal } from '@tavshil/core/src/nutrition'
-import React, { useEffect, useRef, useState } from 'react'
-import { Animated, Easing, Pressable, StyleSheet, View } from 'react-native'
+import React, { useEffect, useState } from 'react'
+import { Keyboard, Platform, Pressable, StyleSheet, View } from 'react-native'
 
 import {
   Badge,
   Button,
   Card,
+  Collapsible,
   Disclaimer,
   Empty,
   ListRow,
@@ -74,6 +75,15 @@ export function RecipesScreen() {
   const [query, setQuery] = useState('')
   const [filters, setFilters] = useState<RecipeFilters>({})
   const [showFilters, setShowFilters] = useState(false)
+  // While the search field has the keyboard (on a phone or tablet), the heading, sort and filters
+  // fold away so the field rises to the top with the results right under it; they come back when
+  // the keyboard goes.
+  const [searching, setSearching] = useState(false)
+  useEffect(() => {
+    if (Platform.OS === 'web') return
+    const sub = Keyboard.addListener('keyboardWillHide', () => setSearching(false))
+    return () => sub.remove()
+  }, [])
   const [newName, setNewName] = useState('')
   const [savedName, setSavedName] = useState('')
   const [selectedId, setSelectedId] = useState<string | null>(null)
@@ -119,240 +129,259 @@ export function RecipesScreen() {
       title="Recipes"
       subtitle="Your household library. Search in any spelling: Shabbos or Shabbat, it finds both."
       actions={<Button label="Import a recipe" href="/recipes/import" variant="soft" />}
+      headHidden={searching}
     >
       <SearchField
         value={query}
         onChangeText={setQuery}
         placeholder="Search recipes, ingredients, variations"
+        onFocus={() => Platform.OS !== 'web' && setSearching(true)}
+        onBlur={() => setSearching(false)}
       />
 
-      <View style={styles.sortRow}>
-        <Text variant="small">Sort by</Text>
-        <Segmented
-          options={SORTS}
-          value={filters.sort ?? 'relevance'}
-          onChange={(v) => set({ sort: v })}
-        />
-      </View>
+      <View style={styles.foldOuter}>
+        <Collapsible open={!searching} duration={320}>
+          <View style={styles.foldInner}>
+            <View style={styles.sortRow}>
+              <Text variant="small">Sort by</Text>
+              <Segmented
+                options={SORTS}
+                value={filters.sort ?? 'relevance'}
+                onChange={(v) => set({ sort: v })}
+              />
+            </View>
 
-      <Card padded={false}>
-        <View style={styles.filterHeader}>
-          <Pressable
-            accessibilityRole="button"
-            accessibilityState={{ expanded: showFilters }}
-            onPress={() => setShowFilters(!showFilters)}
-            style={styles.filterToggle}
-          >
-            <Text variant="label">Filters</Text>
-            <View style={{ flex: 1 }} />
-            <Text variant="small">{showFilters ? '▴' : '▾'}</Text>
-          </Pressable>
-          {activeCount && !showFilters ? (
-            <Pressable accessibilityRole="button" onPress={clearAll} hitSlop={8}>
-              <Text variant="small" color={colors.accent}>
-                Clear
-              </Text>
-            </Pressable>
-          ) : null}
-        </View>
-        {(collections.data ?? []).length ? (
-          <View style={styles.savedRow}>
-            <Text variant="label">Saved</Text>
-            <View style={styles.wrapRow}>
-              {(collections.data ?? []).map((c) => (
-                <Pill
-                  key={c.id}
-                  label={c.name}
-                  selected={selectedId === c.id || (activeCount > 0 && same(filters, c.filters))}
-                  onPress={() => {
-                    if (selectedId === c.id || (activeCount > 0 && same(filters, c.filters))) {
-                      clearAll()
-                    } else {
-                      setFilters({ ...c.filters, sort: filters.sort })
-                      setSelectedId(c.id)
-                      setEditName(c.name)
-                    }
-                  }}
-                />
-              ))}
-            </View>
-          </View>
-        ) : null}
-        <Collapsible open={showFilters}>
-          <>
-            <View style={styles.filterBody}>
-              <FilterGroup label="Course">
-                <Single
-                  value={filters.course}
-                  options={COURSES.map((c) => ({ value: c, label: COURSE_LABEL[c] }))}
-                  onChange={(v) => set({ course: v })}
-                />
-              </FilterGroup>
-              <FilterGroup label="Meat, dairy or parve">
-                <Single
-                  value={filters.kind}
-                  options={KINDS.map((k) => ({ value: k, label: KIND_LABEL[k] }))}
-                  onChange={(v) => set({ kind: v })}
-                />
-              </FilterGroup>
-              {tags.data?.length ? (
-                <FilterGroup label="Tags">
-                  {tags.data.slice(0, 30).map((t) => {
-                    const on = !!filters.tags?.some((x) => x.toLowerCase() === t.tag.toLowerCase())
-                    return (
+            <Card padded={false}>
+              <View style={styles.filterHeader}>
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityState={{ expanded: showFilters }}
+                  onPress={() => setShowFilters(!showFilters)}
+                  style={styles.filterToggle}
+                >
+                  <Text variant="label">Filters</Text>
+                  <View style={{ flex: 1 }} />
+                  <Text variant="small">{showFilters ? '▴' : '▾'}</Text>
+                </Pressable>
+                {activeCount && !showFilters ? (
+                  <Pressable accessibilityRole="button" onPress={clearAll} hitSlop={8}>
+                    <Text variant="small" color={colors.accent}>
+                      Clear
+                    </Text>
+                  </Pressable>
+                ) : null}
+              </View>
+              {(collections.data ?? []).length ? (
+                <View style={styles.savedRow}>
+                  <Text variant="label">Saved</Text>
+                  <View style={styles.wrapRow}>
+                    {(collections.data ?? []).map((c) => (
                       <Pill
-                        key={t.tag}
-                        label={`${t.tag} (${t.recipes})`}
-                        selected={on}
+                        key={c.id}
+                        label={c.name}
+                        selected={
+                          selectedId === c.id || (activeCount > 0 && same(filters, c.filters))
+                        }
                         onPress={() => {
-                          const cur = filters.tags ?? []
-                          set({
-                            tags: on
-                              ? cur.filter((x) => x.toLowerCase() !== t.tag.toLowerCase())
-                              : [...cur, t.tag],
-                          })
+                          if (
+                            selectedId === c.id ||
+                            (activeCount > 0 && same(filters, c.filters))
+                          ) {
+                            clearAll()
+                          } else {
+                            setFilters({ ...c.filters, sort: filters.sort })
+                            setSelectedId(c.id)
+                            setEditName(c.name)
+                          }
                         }}
                       />
-                    )
-                  })}
-                </FilterGroup>
-              ) : null}
-              <FilterGroup label="Safe for">
-                {people.map((p) => (
-                  <Pill
-                    key={p.id}
-                    label={p.name}
-                    selected={safeFor.includes(p.id)}
-                    onPress={() =>
-                      set({
-                        safeFor: safeFor.includes(p.id)
-                          ? safeFor.filter((x) => x !== p.id)
-                          : [...safeFor, p.id],
-                      })
-                    }
-                  />
-                ))}
-              </FilterGroup>
-              <FilterGroup label="More">
-                <Pill
-                  label="Pesach-friendly"
-                  selected={!!filters.pesachFriendly}
-                  onPress={() => toggle('pesachFriendly', true)}
-                />
-                <Pill
-                  label="Under 45 min"
-                  selected={filters.underMinutes === 45}
-                  onPress={() => toggle('underMinutes', 45)}
-                />
-                <Pill
-                  label="Not served in 4 weeks"
-                  selected={filters.notServedWeeks === 4}
-                  onPress={() => toggle('notServedWeeks', 4)}
-                />
-              </FilterGroup>
-              <FilterGroup label="Nutrition, per serving">
-                {GOALS.map((g) => (
-                  <Pill
-                    key={g.value}
-                    label={g.label}
-                    selected={!!filters.nutrition?.includes(g.value)}
-                    onPress={() => {
-                      const cur = filters.nutrition ?? []
-                      set({
-                        nutrition: cur.includes(g.value)
-                          ? cur.filter((x) => x !== g.value)
-                          : [...cur, g.value],
-                      })
-                    }}
-                  />
-                ))}
-              </FilterGroup>
-              <FilterGroup label="Difficulty">
-                <Single
-                  value={filters.difficulty}
-                  options={DIFFS.map((d) => ({ value: d, label: d }))}
-                  onChange={(v) => set({ difficulty: v })}
-                />
-              </FilterGroup>
-              <FilterGroup label="Cost">
-                <Single
-                  value={filters.cost}
-                  options={COSTS.map((c) => ({ value: c, label: c }))}
-                  onChange={(v) => set({ cost: v })}
-                />
-              </FilterGroup>
-              <Button label="Clear filters" variant="ghost" small onPress={clearAll} />
-              {selected ? (
-                <View style={{ gap: space.sm }}>
-                  <Text variant="label">Editing saved filter</Text>
-                  <TextField
-                    accessibilityLabel="Saved filter name"
-                    value={editName}
-                    onChangeText={setEditName}
-                  />
-                  <View style={styles.saveRow}>
-                    <Button
-                      label="Save changes"
-                      variant="secondary"
-                      disabled={!editName.trim()}
-                      loading={updateCollection.isPending}
-                      onPress={() =>
-                        updateCollection.mutateAsync({ id: selected.id, name: editName.trim() })
-                      }
-                    />
-                    <Button
-                      label="Delete"
-                      variant="ghost"
-                      loading={deleteCollection.isPending}
-                      onPress={async () => {
-                        await deleteCollection.mutateAsync(selected.id)
-                        clearAll()
-                      }}
-                    />
+                    ))}
                   </View>
-                  <Text variant="small">
-                    Change the filters above, then Save changes to update “{selected.name}”.
-                  </Text>
                 </View>
-              ) : activeCount > 0 ? (
-                <View style={{ gap: space.sm }}>
-                  <Text variant="label">Filter name</Text>
-                  <View style={styles.saveRow}>
-                    <View style={{ flex: 1, minWidth: 180 }}>
-                      <TextField
-                        accessibilityLabel="Filter name"
-                        value={newName}
-                        onChangeText={(t) => {
-                          setNewName(t)
-                          setSavedName('')
-                        }}
-                        placeholder="e.g. Sheva brachot"
+              ) : null}
+              <Collapsible open={showFilters}>
+                <>
+                  <View style={styles.filterBody}>
+                    <FilterGroup label="Course">
+                      <Single
+                        value={filters.course}
+                        options={COURSES.map((c) => ({ value: c, label: COURSE_LABEL[c] }))}
+                        onChange={(v) => set({ course: v })}
                       />
-                    </View>
-                    <Button
-                      label="Save filter"
-                      variant="secondary"
-                      disabled={!newName.trim()}
-                      loading={saveCollection.isPending}
-                      onPress={async () => {
-                        const name = newName.trim()
-                        await saveCollection.mutateAsync(name)
-                        setNewName('')
-                        setSavedName(name)
-                      }}
-                    />
+                    </FilterGroup>
+                    <FilterGroup label="Meat, dairy or parve">
+                      <Single
+                        value={filters.kind}
+                        options={KINDS.map((k) => ({ value: k, label: KIND_LABEL[k] }))}
+                        onChange={(v) => set({ kind: v })}
+                      />
+                    </FilterGroup>
+                    {tags.data?.length ? (
+                      <FilterGroup label="Tags">
+                        {tags.data.slice(0, 30).map((t) => {
+                          const on = !!filters.tags?.some(
+                            (x) => x.toLowerCase() === t.tag.toLowerCase(),
+                          )
+                          return (
+                            <Pill
+                              key={t.tag}
+                              label={`${t.tag} (${t.recipes})`}
+                              selected={on}
+                              onPress={() => {
+                                const cur = filters.tags ?? []
+                                set({
+                                  tags: on
+                                    ? cur.filter((x) => x.toLowerCase() !== t.tag.toLowerCase())
+                                    : [...cur, t.tag],
+                                })
+                              }}
+                            />
+                          )
+                        })}
+                      </FilterGroup>
+                    ) : null}
+                    <FilterGroup label="Safe for">
+                      {people.map((p) => (
+                        <Pill
+                          key={p.id}
+                          label={p.name}
+                          selected={safeFor.includes(p.id)}
+                          onPress={() =>
+                            set({
+                              safeFor: safeFor.includes(p.id)
+                                ? safeFor.filter((x) => x !== p.id)
+                                : [...safeFor, p.id],
+                            })
+                          }
+                        />
+                      ))}
+                    </FilterGroup>
+                    <FilterGroup label="More">
+                      <Pill
+                        label="Pesach-friendly"
+                        selected={!!filters.pesachFriendly}
+                        onPress={() => toggle('pesachFriendly', true)}
+                      />
+                      <Pill
+                        label="Under 45 min"
+                        selected={filters.underMinutes === 45}
+                        onPress={() => toggle('underMinutes', 45)}
+                      />
+                      <Pill
+                        label="Not served in 4 weeks"
+                        selected={filters.notServedWeeks === 4}
+                        onPress={() => toggle('notServedWeeks', 4)}
+                      />
+                    </FilterGroup>
+                    <FilterGroup label="Nutrition, per serving">
+                      {GOALS.map((g) => (
+                        <Pill
+                          key={g.value}
+                          label={g.label}
+                          selected={!!filters.nutrition?.includes(g.value)}
+                          onPress={() => {
+                            const cur = filters.nutrition ?? []
+                            set({
+                              nutrition: cur.includes(g.value)
+                                ? cur.filter((x) => x !== g.value)
+                                : [...cur, g.value],
+                            })
+                          }}
+                        />
+                      ))}
+                    </FilterGroup>
+                    <FilterGroup label="Difficulty">
+                      <Single
+                        value={filters.difficulty}
+                        options={DIFFS.map((d) => ({ value: d, label: d }))}
+                        onChange={(v) => set({ difficulty: v })}
+                      />
+                    </FilterGroup>
+                    <FilterGroup label="Cost">
+                      <Single
+                        value={filters.cost}
+                        options={COSTS.map((c) => ({ value: c, label: c }))}
+                        onChange={(v) => set({ cost: v })}
+                      />
+                    </FilterGroup>
+                    <Button label="Clear filters" variant="ghost" small onPress={clearAll} />
+                    {selected ? (
+                      <View style={{ gap: space.sm }}>
+                        <Text variant="label">Editing saved filter</Text>
+                        <TextField
+                          accessibilityLabel="Saved filter name"
+                          value={editName}
+                          onChangeText={setEditName}
+                        />
+                        <View style={styles.saveRow}>
+                          <Button
+                            label="Save changes"
+                            variant="secondary"
+                            disabled={!editName.trim()}
+                            loading={updateCollection.isPending}
+                            onPress={() =>
+                              updateCollection.mutateAsync({
+                                id: selected.id,
+                                name: editName.trim(),
+                              })
+                            }
+                          />
+                          <Button
+                            label="Delete"
+                            variant="ghost"
+                            loading={deleteCollection.isPending}
+                            onPress={async () => {
+                              await deleteCollection.mutateAsync(selected.id)
+                              clearAll()
+                            }}
+                          />
+                        </View>
+                        <Text variant="small">
+                          Change the filters above, then Save changes to update “{selected.name}”.
+                        </Text>
+                      </View>
+                    ) : activeCount > 0 ? (
+                      <View style={{ gap: space.sm }}>
+                        <Text variant="label">Filter name</Text>
+                        <View style={styles.saveRow}>
+                          <View style={{ flex: 1, minWidth: 180 }}>
+                            <TextField
+                              accessibilityLabel="Filter name"
+                              value={newName}
+                              onChangeText={(t) => {
+                                setNewName(t)
+                                setSavedName('')
+                              }}
+                              placeholder="e.g. Sheva brachot"
+                            />
+                          </View>
+                          <Button
+                            label="Save filter"
+                            variant="secondary"
+                            disabled={!newName.trim()}
+                            loading={saveCollection.isPending}
+                            onPress={async () => {
+                              const name = newName.trim()
+                              await saveCollection.mutateAsync(name)
+                              setNewName('')
+                              setSavedName(name)
+                            }}
+                          />
+                        </View>
+                        <Text variant="small">
+                          {savedName
+                            ? `Saved. “${savedName}” is now in the Saved row.`
+                            : 'Adds it to the Saved row so you can switch these filters back on in one tap.'}
+                        </Text>
+                      </View>
+                    ) : null}
                   </View>
-                  <Text variant="small">
-                    {savedName
-                      ? `Saved. “${savedName}” is now in the Saved row.`
-                      : 'Adds it to the Saved row so you can switch these filters back on in one tap.'}
-                  </Text>
-                </View>
-              ) : null}
-            </View>
-          </>
+                </>
+              </Collapsible>
+            </Card>
+          </View>
         </Collapsible>
-      </Card>
+      </View>
 
       {recipes.isLoading || !recipes.data ? (
         <Loading />
@@ -449,37 +478,6 @@ function FirstRun() {
   )
 }
 
-/** Grows open and shrinks shut, so the panel visibly unfolds from its header. */
-function Collapsible({ open, children }: { open: boolean; children: React.ReactNode }) {
-  const t = useRef(new Animated.Value(open ? 1 : 0)).current
-  const [height, setHeight] = useState(0)
-  useEffect(() => {
-    Animated.timing(t, {
-      toValue: open ? 1 : 0,
-      duration: 380,
-      easing: Easing.inOut(Easing.cubic),
-      useNativeDriver: false,
-    }).start()
-  }, [open, t])
-  return (
-    <Animated.View
-      pointerEvents={open ? 'auto' : 'none'}
-      style={{
-        overflow: 'hidden',
-        height: t.interpolate({ inputRange: [0, 1], outputRange: [0, height] }),
-        opacity: t.interpolate({ inputRange: [0, 0.4, 1], outputRange: [0, 0.6, 1] }),
-      }}
-    >
-      <View
-        style={{ position: 'absolute', left: 0, right: 0, top: 0 }}
-        onLayout={(e) => setHeight(e.nativeEvent.layout.height)}
-      >
-        {children}
-      </View>
-    </Animated.View>
-  )
-}
-
 /** Pick one, or "Any" for no restriction. Multi-select groups stay as toggle chips. */
 function Single<T extends string>({
   value,
@@ -540,5 +538,7 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
     borderTopColor: colors.line,
   },
+  foldOuter: { marginBottom: -space.xl },
+  foldInner: { gap: space.xl, paddingBottom: space.xl },
   badges: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
 })

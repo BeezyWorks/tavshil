@@ -1,6 +1,7 @@
 export { Button, type ButtonVariant } from './Button'
 export { Card } from './Card'
 export { Checkbox } from './Checkbox'
+export { Collapsible } from './Collapsible'
 export { ConstraintText, HouseholdGuests, type HouseholdGuestsProps } from './HouseholdGuests'
 export { HouseholdSearch, matchHouseholds, type HouseholdSearchProps } from './HouseholdSearch'
 export { ListRow } from './ListRow'

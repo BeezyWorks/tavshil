@@ -37,10 +37,14 @@ export function SearchField({
   value,
   onChangeText,
   placeholder = 'Search',
+  onFocus,
+  onBlur,
 }: {
   value: string
   onChangeText: (t: string) => void
   placeholder?: string
+  onFocus?: () => void
+  onBlur?: () => void
 }) {
   return (
     <View style={styles.search}>
@@ -54,6 +58,8 @@ export function SearchField({
         autoCapitalize="none"
         autoCorrect={false}
         returnKeyType="search"
+        onFocus={onFocus}
+        onBlur={onBlur}
         style={[styles.input, styles.searchInput]}
       />
     </View>
