@@ -1,4 +1,5 @@
-import { useRouter, type Href } from 'expo-router'
+import { type Href } from 'expo-router'
+import { useTabRouter } from '@/lib/tabRoute'
 import React, { useState } from 'react'
 import { StyleSheet, View } from 'react-native'
 
@@ -24,7 +25,7 @@ export function DayActions({ date, onClose }: { date: ISODate; onClose: () => vo
   const [slot, setSlot] = useState<DaySlot>('dinner')
   const [time, setTime] = useState('')
   const [error, setError] = useState('')
-  const router = useRouter()
+  const router = useTabRouter()
   const create = useCreatePlanMeal()
 
   const host = async () => {

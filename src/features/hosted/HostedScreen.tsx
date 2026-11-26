@@ -1,4 +1,5 @@
-import { useLocalSearchParams, useRouter } from 'expo-router'
+import { useLocalSearchParams } from 'expo-router'
+import { useTabRouter } from '@/lib/tabRoute'
 import React, { useEffect, useState } from 'react'
 import { Pressable, StyleSheet, View } from 'react-native'
 
@@ -23,7 +24,7 @@ const matches = (m: HostedMeal, f: Filter): boolean =>
 
 export function HostedScreen() {
   const { key } = useLocalSearchParams<{ key: string }>()
-  const router = useRouter()
+  const router = useTabRouter()
   const { data, isLoading, error } = useHosted(key)
 
   // Opening meal-<id> for a meal in a run returns the run: show its key in the URL.

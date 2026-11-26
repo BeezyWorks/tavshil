@@ -1,4 +1,5 @@
-import { useRouter, type Href } from 'expo-router'
+import { type Href } from 'expo-router'
+import { useTabRouter } from '@/lib/tabRoute'
 import React, { useState } from 'react'
 
 import {
@@ -26,7 +27,7 @@ export function constraintTone(c: Constraint): Tone {
 
 /** One row per household; open one to see and edit its members. */
 export function PeopleScreen() {
-  const router = useRouter()
+  const router = useTabRouter()
   const household = useHousehold()
   const contacts = useContacts()
   const create = useCreateContactHousehold()

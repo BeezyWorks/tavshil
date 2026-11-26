@@ -1,4 +1,5 @@
-import { useRouter, type Href } from 'expo-router'
+import { type Href } from 'expo-router'
+import { useTabRouter } from '@/lib/tabRoute'
 import React from 'react'
 import { Pressable, StyleSheet, type StyleProp, type ViewStyle } from 'react-native'
 
@@ -50,7 +51,7 @@ export function Button({
   style,
   testID,
 }: Props) {
-  const router = useRouter()
+  const router = useTabRouter()
   const p = palette[variant]
   const off = disabled || loading
   return (

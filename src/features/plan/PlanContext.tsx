@@ -1,4 +1,5 @@
-import { useRouter, type Href } from 'expo-router'
+import { type Href } from 'expo-router'
+import { useTabRouter } from '@/lib/tabRoute'
 import React, { createContext, useContext, useMemo } from 'react'
 
 import { useEnsureRunMeal } from '@/lib/api/hooks'
@@ -58,7 +59,7 @@ export function PlanProvider({
   setSelected: (s: Selection | null) => void
   children: React.ReactNode
 }) {
-  const router = useRouter()
+  const router = useTabRouter()
   const ensure = useEnsureRunMeal()
   const value = useMemo<Ctx>(
     () => ({

@@ -1,4 +1,5 @@
-import { useRouter, type Href } from 'expo-router'
+import { type Href } from 'expo-router'
+import { useTabRouter } from '@/lib/tabRoute'
 import React, { useCallback, useMemo, useState } from 'react'
 import { Pressable, StyleSheet, View } from 'react-native'
 
@@ -260,7 +261,7 @@ function TaskRow({
   last?: boolean
   hideMeal?: boolean
 }) {
-  const router = useRouter()
+  const router = useTabRouter()
   const set = useSetPrepDone()
   const open = t.recipeId ? () => router.push(`/recipes/${t.recipeId}` as Href) : undefined
   const cook =

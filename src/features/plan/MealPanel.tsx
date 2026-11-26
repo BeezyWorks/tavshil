@@ -1,4 +1,5 @@
-import { useRouter, type Href } from 'expo-router'
+import { type Href } from 'expo-router'
+import { useTabRouter } from '@/lib/tabRoute'
 import React, { useState } from 'react'
 import { Pressable, ScrollView, StyleSheet, View } from 'react-native'
 
@@ -142,7 +143,7 @@ function useDishes(meal: MealCard): MealDish[] {
 }
 
 function DishRow({ dish, meal }: { dish: MealDish; meal: MealCard }) {
-  const router = useRouter()
+  const router = useTabRouter()
   const { close } = usePlanCtx()
   const sub = [
     dish.course ? (COURSE_LABEL[dish.course] ?? dish.course) : '',
@@ -176,7 +177,7 @@ function DishRow({ dish, meal }: { dish: MealDish; meal: MealCard }) {
 }
 
 function MealView({ meal }: { meal: MealCard }) {
-  const router = useRouter()
+  const router = useTabRouter()
   const { setChange, today } = usePlanCtx()
   const dishes = useDishes(meal)
   const prep = usePrep()

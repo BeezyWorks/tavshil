@@ -1,4 +1,5 @@
-import { useRouter, type Href } from 'expo-router'
+import { type Href } from 'expo-router'
+import { useTabRouter } from '@/lib/tabRoute'
 import React, { useEffect, useRef, useState } from 'react'
 import { Platform, Pressable, StyleSheet, TextInput, View, type ViewStyle } from 'react-native'
 
@@ -311,7 +312,7 @@ function Dish({
   onReplace: () => void
   busy: boolean
 }) {
-  const router = useRouter()
+  const router = useTabRouter()
   const update = useUpdateMealDish()
   const [editing, setEditing] = useState(false)
   const [title, setTitle] = useState(item.title)
@@ -603,7 +604,7 @@ function Total({ meal }: { meal: HostedMeal }) {
 // ---------------------------------------------------------------- folded
 
 export function FoldedMeal({ meal }: { meal: HostedMeal }) {
-  const router = useRouter()
+  const router = useTabRouter()
   const getId = useMealId(meal)
   const addH = useAddMealHousehold()
   const createH = useCreateContactHousehold()
